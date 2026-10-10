@@ -15,6 +15,8 @@ from pathlib import Path
 
 CI_FILES = {'.github/workflows/tests.yml', 'README.md', 'tools/ci_scope.py',
             'tests/test_ci_scope.py', 'tests/test_ci_workflow.py'}
+# Closed documentation pages with no generated/runtime consumer. Unknown docs stay full.
+RUNBOOK_DOCS = {'docs/runbooks/tribu-sdk-successor.md'}
 CONTEXT_COPY_FILES = {'clusterctl/onboarding_guest.py', 'clusterctl/onboarding_host.py',
                       'tests/test_onboarding_guest.py', 'tests/test_onboarding_host.py'}
 CONTEXT_COPY_TESTS = ('tests/test_onboarding_guest.py', 'tests/test_onboarding_host.py',
@@ -208,7 +210,9 @@ RECEIVING_RUNTIME_FILES = {'clusterctl/onboarding_peer.py', 'clusterctl/onboardi
 def select(changed: list[str], root: Path) -> tuple[str, list[str]]:
     if not changed:
         return 'full', ['tests']
-    if set(changed) <= CI_FILES:
+    if set(changed) <= RUNBOOK_DOCS:
+        return 'docs', []
+    if set(changed) <= CI_FILES | RUNBOOK_DOCS:
         return 'ci', ['tests/test_ci_scope.py', 'tests/test_ci_workflow.py']
     if (set(changed) & {'clusterctl/onboarding_peer.py', 'clusterctl/onboarding_runtime.py'}
             and set(changed) <= RECEIVING_RUNTIME_FILES | CI_FILES
