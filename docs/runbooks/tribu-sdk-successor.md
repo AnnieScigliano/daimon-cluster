@@ -59,3 +59,46 @@ installation together, preserving subsequent receiving writes and all native
 journals. A checkout test, published package or installed wheel is not live
 readiness. The owning Matrix epic records actual cohort acceptance, confirmed
 Telegram replies and native receipts after the authorized bounded demonstration.
+
+## Passive paired-human Tribu application (phase 4)
+
+Parent: [Matrix #288](https://github.com/AlterMundi/daimon-matrix/issues/288),
+roadmap [#289](https://github.com/AlterMundi/daimon-matrix/issues/289), deployment
+[Cluster #188](https://github.com/nicoechaniz/daimon-cluster/issues/188).
+The SDK's `docs/runbooks/tribu-human-mentions.md` owns the closed configuration
+contracts, passive adapter and manual owner-client operations.
+
+Use one supervised passive consumer for the existing shared visibility bot,
+separate from every private Telecodex consumer. Qualify its identity, selected
+chat and absent webhook without polling during staging; startup stops on a
+conflicting consumer. Place its private journal, pinned TLS configuration and
+per-being scoped credentials on the existing host/container route. Reuse each
+body's current public authority, native socket, own public echo catalogs and
+existing private-bot paired-human ID. A shared harness account, global human
+allowlist, group membership or display name does not grant cross-being access.
+Never collect resolved bot or human data again from participants.
+
+Install a private owner-client configuration and discoverable manual guidance
+for each body. An explicit `read` resolves only that human's pending parent IDs
+against selected own public proof catalogs and exact authored events. Explicit
+`reply` uses the running native daemon to sign the intent; each public part
+requires confirmed Telegram parent evidence. It keeps conversation in the
+requesting session and adds no callback or dependency to native delivery.
+Unresolved targets remain pending; dispatched but uncertain parts are never
+blindly retransmitted. Neither receiving nor querying chooses a native session,
+opens model inference or imports memory. Dedicated topics, attention schedulers,
+compaction renewal and cross-human permission grants remain later increments.
+
+Before selection, retain guarded current unit/config bytes and actual SDK/runtime
+digests in one protected cutover plan. Review that exact plan, qualify the adapter
+with `serve --check`, and select the immutable SDK generations and owner clients.
+Do not restart private Telegram consumers. Verify live queries under each owner,
+correct rejection of another human, no automatic turns, and retry stability.
+Genuine human acceptance is separate evidence and cannot be fabricated from
+synthetic fixtures.
+
+Rollback stops the passive consumer and selects the retained compatible SDKs.
+Preserve the human journal, pending/revision history, cursor, reply/outbox states,
+prepared owner requests, native ledgers/proofs and all private Telecodex histories.
+Never replace a publication database with an older snapshot after an effect.
+Forward restart resumes the same journal.
