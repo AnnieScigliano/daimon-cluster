@@ -1,3 +1,3 @@
-daimon-matrix @ git+https://github.com/AlterMundi/daimon-matrix.git@5e863bc69fc40e15713bde2dc1e5bf17e47b9cb2
+daimon-matrix @ git+https://github.com/AlterMundi/daimon-matrix.git@d82e960c69acf81c4146740e27883bdb18be4b0b
 PyYAML==6.0.3
 cryptography==50.0.0
