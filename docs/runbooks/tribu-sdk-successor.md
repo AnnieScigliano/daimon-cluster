@@ -102,3 +102,36 @@ Preserve the human journal, pending/revision history, cursor, reply/outbox state
 prepared owner requests, native ledgers/proofs and all private Telecodex histories.
 Never replace a publication database with an older snapshot after an effect.
 Forward restart resumes the same journal.
+
+### Optional passive-service network route
+
+Owner clients in Incus guests need an explicitly selected host-service route.
+The current bridge input policy rejects every host port not listed before its
+container drop. A working host-local query does not prove guest reachability.
+Use a dedicated rule for the passive adapter's selected bridge gateway and TLS
+port, not a proxy through the legacy broker or a management-rule modification:
+
+```text
+iifname "incusbr0" ip daddr <BRIDGE_GATEWAY> tcp dport 9491 accept comment "daimon-tribu-human"
+```
+
+Keep this optional until the adapter is selected. Qualify actual guest TCP and
+pinned-CA queries for each owner. A reviewed operational candidate inserts this
+one rule immediately before the existing bridge drop and persists the same line
+with exact before/after file hashes. Compare the existing rule expressions,
+handles and chain policies before/after, excluding only the new comment. Do not
+reload the whole firewall, flush rules, restart nftables, rewrite the template
+onto a divergent host or alter SSH, management, bridge isolation or forward
+policy. Rollback deletes only the new rule and restores its retained config
+bytes; retain every other service's rules and all Tribu journals.
+
+For user-systemd deployments, `PrivateTmp=true` can put ancestor directories in
+a namespace with unmapped root ownership. That conflicts with the existing
+protected-file reader. Select this unit without `PrivateTmp`; keep owner-only
+storage, `UMask=0077`, `NoNewPrivileges` and the package's original path guards.
+The adapter does not use temporary storage. This is a service configuration
+correction, not a reason to weaken file validation.
+
+Manual owner command syntax is `reply --source ID --revision REVISION --id UUID
+--text TEXT`, `retry UUID`, and `publication UUID`. Installed local guides must
+match the selected package parser. Keep the operation UUID on retries.
