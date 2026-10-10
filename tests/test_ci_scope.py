@@ -325,3 +325,15 @@ def test_telegram_upgrade_covers_native_binding_idle_database_and_receiving_moun
             'tests/test_onboarding_host.py', 'tests/test_onboarding_intake.py'} <= set(tests)
     assert select(changed, tmp_path) == ('full', ['tests'])
     assert select(changed + ['requirements-weave.txt'], ROOT) == ('full', ['tests'])
+
+
+def test_closed_runbook_docs_skip_runtime_jobs_but_mixed_changes_keep_coverage():
+    docs = ['docs/runbooks/tribu-sdk-successor.md']
+    assert select(docs, ROOT) == ('docs', [])
+    assert select(docs + ['tools/ci_scope.py'], ROOT)[0] == 'ci'
+    for boundary in ('clusterctl/onboarding_runtime.py', 'configs/nftables.conf',
+                     'requirements-weave.txt', 'unknown.md'):
+        assert select(docs + [boundary], ROOT)[0] == 'full'
+    workflow = (ROOT / '.github/workflows/tests.yml').read_text()
+    test_job = workflow.split('  test:\n', 1)[1].split('    steps:', 1)[0]
+    assert "if: needs.scope.outputs.profile != 'docs'" in test_job
