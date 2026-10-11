@@ -61,3 +61,12 @@ screenshot of a beautiful empty form alone does not establish a usable interface
 Humans and daimons enter through the same URL. The authored Markdown/JSON views
 expose the actual API contract, access requirements and completion boundary.
 Visual presentation and machine rendering must describe the same service.
+
+## Resonancia study and Field coordination
+
+Nico selected the middle cyan-globe **Resonancia** study on 2026-10-11.
+[The laboratory](design/matrix-interface-lab/README.md) preserves reviewable source
+and qualification. Detailed shared components and production adoption remain to
+be developed; the tokens above describe the existing baseline, not a completed
+restyle. [Daimon Field](daimon-field.md) points to decision D001 and the canonical
+cross-repository roadmap.
