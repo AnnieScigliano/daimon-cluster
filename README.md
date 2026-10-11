@@ -80,3 +80,10 @@ python -m pytest -q \
 `tools/check_rc_types.py` is the single authoritative type-check file list used
 by both this command and CI. Docker E2E tests are opt-in and must run only
 against local disposable state.
+
+## Daimon Field coordination
+
+Cross-repository decisions and repository-specific implications are indexed in
+[the Daimon Field projection](docs/daimon-field.md). The existing private
+[AlterMundi Project 13](https://github.com/orgs/AlterMundi/projects/13) is the canonical decision and roadmap surface;
+repository access and Project access are separate.
