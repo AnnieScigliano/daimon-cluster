@@ -22,13 +22,15 @@ from .onboarding import Backend, JobStore, OnboardingError
 class Worker:
     def __init__(self, store: JobStore, backend: Callable[[], Backend], *, concurrency: int = 2,
                  publish: Callable[[dict], None] | None = None,
-                 plans: Callable[[], list[dict]] | None = None):
+                 plans: Callable[[], list[dict]] | None = None,
+                 homes: Callable[[dict], dict] | None = None):
         if type(concurrency) is not int or not 1 <= concurrency <= 8:
             raise OnboardingError("invalid_worker_concurrency")
         self.store, self.backend = store, backend
         self.concurrency = concurrency
         self.publish = publish
         self.plans = plans
+        self.homes = homes
 
     def _enqueue(self) -> None:
         if self.plans:
@@ -43,6 +45,8 @@ class Worker:
             result = self.store.tick(name, self.backend())
             if self.publish:
                 self.publish(result)
+            if self.homes and result.get('active') is True:
+                self.homes(result)
             return result
         except (OnboardingError, being_seed.SeedError, OSError, ValueError, TypeError, KeyError):
             # Do not print name/content/exception from an invalid private record.
@@ -81,6 +85,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--once", action="store_true")
+    parser.add_argument('--home-placements',type=Path)
     args = parser.parse_args(argv)
     try:
         from .onboarding_host import HostBackend, HostConfig
@@ -91,8 +96,16 @@ def main(argv: list[str] | None = None) -> int:
         from .onboarding_progress import Progress
 
         progress = Progress(config.progress, worker_uid=os.geteuid()) if config.progress else None
-        worker = Worker(JobStore(config.jobs), lambda: HostBackend(config, input_cache=inputs), concurrency=config.concurrency,
-                        publish=progress.publish if progress else None, plans=config.approved_plans)
+        store=JobStore(config.jobs)
+        homes=None
+        if args.home_placements:
+            if progress is None:
+                raise OnboardingError('trusted_home_progress_required')
+            from .onboarding_homes import configure
+            homes=configure(args.home_placements,progress=config.progress,store=store,
+                            backend=HostBackend(config,input_cache=inputs),worker_uid=os.geteuid())
+        worker = Worker(store, lambda: HostBackend(config, input_cache=inputs), concurrency=config.concurrency,
+                        publish=progress.publish if progress else None, plans=config.approved_plans,homes=homes)
         if args.once:
             print(json.dumps(worker.once()))
             return 0

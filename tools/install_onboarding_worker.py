@@ -57,12 +57,16 @@ def _install_unit_locked(directory: Path, candidate: bytes, *, previous_sha256: 
     return True
 
 
-def service(release: Path, config: Path) -> bytes:
+def service(release: Path, config: Path, *, home_placements: Path | None = None) -> bytes:
     if (release.parent != Path('/opt/daimon-cluster-releases')
             or not re.fullmatch(r'[0-9a-f]{40}', release.name)
             or not config.is_absolute() or '..' in config.parts):
         raise OnboardingError('qualified_worker_release_required')
     argv = [str(release / 'venv/bin/python'), '-m', 'clusterctl.onboarding_worker', '--config', str(config)]
+    if home_placements is not None:
+        if not home_placements.is_absolute() or '..' in home_placements.parts:
+            raise OnboardingError('qualified_home_placements_required')
+        argv += ['--home-placements',str(home_placements)]
     encoded = ' '.join(json.dumps(arg.replace('%', '%%').replace('$', '$$')) for arg in argv)
     return ('[Unit]\nDescription=Durable authorized Daimon onboarding worker\n'
         'After=network-online.target\nWants=network-online.target\n'
@@ -80,11 +84,12 @@ def main(argv=None) -> int:
     parser.add_argument('--config', type=Path, required=True)
     parser.add_argument('--activate', action='store_true')
     parser.add_argument('--replace-unit-sha256', help='Exact installed predecessor; preserve rollback')
+    parser.add_argument('--home-placements',type=Path)
     args = parser.parse_args(argv)
     try:
         if os.geteuid() != 0:
             raise OnboardingError('host_operator_required')
-        candidate = service(args.release, args.config)
+        candidate = service(args.release, args.config,home_placements=args.home_placements)
         HostConfig.load(args.config)
         # Verify the selected installation, never another checkout's SDK.
         result = subprocess.run([str(args.release / 'venv/bin/python'), '-c',

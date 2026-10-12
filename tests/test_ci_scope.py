@@ -337,3 +337,12 @@ def test_closed_runbook_docs_skip_runtime_jobs_but_mixed_changes_keep_coverage()
     workflow = (ROOT / '.github/workflows/tests.yml').read_text()
     test_job = workflow.split('  test:\n', 1)[1].split('    steps:', 1)[0]
     assert "if: needs.scope.outputs.profile != 'docs'" in test_job
+
+
+def test_homes_keep_read_auth_contracts_and_shared_changes_keep_full(tmp_path):
+    from tools.ci_scope import HOME_FILES, HOME_TESTS
+    assert select(sorted(HOME_FILES),ROOT)==('homes',list(HOME_TESTS))
+    assert select(sorted(HOME_FILES)+['requirements-weave.txt'],ROOT)==('full',['tests'])
+    assert select(sorted(HOME_FILES)+['clusterd/auth.py'],ROOT)==('full',['tests'])
+    assert select(sorted(HOME_FILES)+['clusterctl/homes/unknown.py'],ROOT)==('full',['tests'])
+    assert select(sorted(HOME_FILES),tmp_path)==('full',['tests'])
