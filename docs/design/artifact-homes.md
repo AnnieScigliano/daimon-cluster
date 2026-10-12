@@ -125,3 +125,29 @@ or upgrade a bot merely to install the home provider.
 
 No terminal, desktop, administration-path change, native-session replacement,
 autonomous publication, peer attention or model wakeup belongs to this increment.
+
+## Shared passkeys
+
+Enable the optional gateway adapter with `--passkey-rp-id` and the pinned
+`requirements-homes.txt`; body/worker environments and receiving config remain
+unchanged. The parent-domain RP serves exact configured public home origins;
+WebAuthn never accepts a wildcard origin or an isolated artifact origin.
+A passkey binds a random opaque user handle to the current human actor/revision
+in the existing shared session store. It establishes identity, not resource access.
+
+Enrollment and revocation require a browser cookie from an approved code ceremony
+still inside its fifteen-minute proof window, or a passkey-verified browser
+session less than fifteen minutes old. General read/bearer sessions cannot enroll
+keys. Registration and discoverable login require user verification; the phone
+may use biometrics or its PIN. Challenge/proof/operation/origin/expiry, actual
+signatures, RP hashes and user handles are verified. Credential counters and
+session issuance are atomic; zero counters from synced keys remain valid.
+Revocation closes every session issued by that key across all homes. Existing
+resource and child-content checks continue to enforce current grants.
+
+`/access/keys` manages a human's keys; `/access/passkey` logs in. The normal approved
+code route remains recovery. Cancellation and unsupported browsers keep that
+route usable. Credential creation/get are denied on isolated content responses.
+No external scripts, native-model activation or biometric data collection is
+involved. A virtual-authenticator check qualifies WebAuthn behavior, not the
+human's actual biometric hardware. Retain that distinction in delivery evidence.
