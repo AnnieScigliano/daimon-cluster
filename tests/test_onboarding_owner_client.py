@@ -357,7 +357,8 @@ def test_interrupted_partial_publication_reuses_exact_client(native):
     assert client.stat().st_ino == before
 
 
-def test_slow_authenticated_native_daemon_is_not_treated_as_departed(native):
+@pytest.mark.parametrize('observer', ['owner-client', 'runtime-presence'])
+def test_slow_authenticated_native_daemon_is_not_treated_as_departed(native, observer):
     import socket
     import threading
     import time
@@ -373,52 +374,70 @@ def test_slow_authenticated_native_daemon_is_not_treated_as_departed(native):
     listener.settimeout(1)
     stop = threading.Event()
     errors = []
+    workers = []
+    delay_lock = threading.Lock()
+    delayed = False
 
     def receive(connection, size):
         data = b""
         while len(data) < size:
             chunk = connection.recv(size - len(data))
             if not chunk:
+                if not data:
+                    return b''
                 raise ValueError("unfinished authenticated frame")
             data += chunk
         return data
 
+    def handle(connection):
+        nonlocal delayed
+        try:
+            with connection, socket.socket(socket.AF_UNIX) as server:
+                header = receive(connection, 4)
+                if not header:
+                    # Presence also makes an empty SO_PEERCRED connection.
+                    return
+                server.connect(str(actual_path))
+                server.sendall(header + receive(connection, int.from_bytes(header, 'big')))
+                header = receive(server, 4)
+                response = header + receive(server, int.from_bytes(header, 'big'))
+                with delay_lock:
+                    first = not delayed
+                    delayed = True
+                if first:
+                    time.sleep(6)
+                connection.sendall(response)
+        except Exception as error:
+            errors.append(type(error).__name__)
+
     def forward():
-        delayed = False
         while not stop.is_set():
             try:
                 connection, _ = listener.accept()
             except TimeoutError:
                 continue
-            try:
-                with connection, socket.socket(socket.AF_UNIX) as server:
-                    server.connect(str(actual_path))
-                    header = receive(connection, 4)
-                    server.sendall(
-                        header + receive(connection, int.from_bytes(header, "big"))
-                    )
-                    header = receive(server, 4)
-                    response = header + receive(server, int.from_bytes(header, "big"))
-                    if not delayed:
-                        # Reproduce the actual receiving failure: a genuine signed
-                        # response exists but arrives beyond the old five seconds.
-                        time.sleep(6)
-                        delayed = True
-                    connection.sendall(response)
-            except Exception as error:
-                errors.append(type(error).__name__)
+            worker = threading.Thread(target=handle, args=(connection,))
+            workers.append(worker)
+            worker.start()
 
     thread = threading.Thread(target=forward)
     thread.start()
     try:
-        result = invoke(payload)
-        assert result.returncode == 0, result.stderr
-        assert json.loads(result.stdout)["installed"] is True
+        if observer == 'owner-client':
+            result = invoke(payload)
+            assert result.returncode == 0, result.stderr
+            assert json.loads(result.stdout)["installed"] is True
+        else:
+            result = target.running()
+            assert result['origin'] == payload['origin']
+            assert result['schema'] == 'cluster-onboarding-runtime-presence/v1'
         assert not errors
     finally:
         stop.set()
         thread.join(timeout=10)
         listener.close()
+        for worker in workers:
+            worker.join(timeout=10)
         socket_path.unlink()
         actual_path.rename(socket_path)
 
