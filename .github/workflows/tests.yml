@@ -476,7 +476,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: AlterMundi/daimon-matrix
-          ref: 77aac342b1eef791549e5030ca8af626cd18b8d8
+          ref: ff80bac963470ef58f7a3d812aa4ebd2d782110c
           path: matrix-source
           fetch-depth: 0
           persist-credentials: false
@@ -492,7 +492,7 @@ jobs:
           done
           docker version
           test "$(git -C matrix-source rev-parse HEAD)" = \
-            77aac342b1eef791549e5030ca8af626cd18b8d8
+            ff80bac963470ef58f7a3d812aa4ebd2d782110c
       - name: Prove isolated recovery roles and read-only snapshot restore
         env:
           DAIMON_RUN_DOCKER_RECOVERY_TESTS: "1"
