@@ -228,7 +228,8 @@ HOME_PROVISION_TESTS = HOME_TESTS + ('tests/test_onboarding_homes.py', 'tests/te
 HOME_WORKER_FILES = {'clusterctl/onboarding_host.py', 'tests/test_onboarding_host.py',
     'tools/build_home_worker_successor.py', 'tests/test_home_worker_successor.py',
     'clusterctl/onboarding_worker.py', 'clusterctl/onboarding_homes.py',
-    'clusterctl/homes/service.py', 'tests/test_onboarding_homes.py'}
+    'clusterctl/homes/service.py', 'tests/test_onboarding_homes.py',
+    'docs/design/artifact-homes.md'}
 HOME_WORKER_TESTS = ('tests/test_home_worker_successor.py', 'tests/test_onboarding_host.py',
     'tests/test_onboarding_telegram.py', 'tests/test_onboarding_host_ownership.py',
     'tests/test_onboarding_homes.py', 'tests/test_onboarding_worker_install.py',
