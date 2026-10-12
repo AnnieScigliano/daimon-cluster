@@ -421,7 +421,9 @@ class Target:
             with ProcessPresence(process) as presence:
                 key = bytearray(onboarding_release.regular(root / "client.key", uid=os.geteuid()))
                 config = ClientConfig.load(root / "client.json", key)
-                client = LocalClient(root / "matrix.sock", config)
+                # Match the maintained owner client's bounded response window.
+                # A slow authenticated status reply is not evidence of absence.
+                client = LocalClient(root / "matrix.sock", config, timeout_seconds=40)
                 _, status = client.runtime_status()
                 expected = prepared["receipt"]["origin"]
                 if status["ok"] is not True or any(status["server"].get(field) != value for field, value in expected.items()):

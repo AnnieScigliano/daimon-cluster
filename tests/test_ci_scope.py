@@ -356,3 +356,14 @@ def test_home_worker_composition_keeps_qualification_and_mount_boundaries(tmp_pa
     for name in ('clusterctl/onboarding_sdk.py', 'clusterctl/onboarding_telegram.py',
                  'requirements-weave.txt', 'clusterctl/onboarding_target.py'):
         assert select(changed + [name], ROOT) == ('full', ['tests'])
+
+
+def test_native_observation_keeps_actual_signed_presence_and_owner_contracts(tmp_path):
+    changed = ['clusterctl/onboarding_target.py', 'tests/test_onboarding_owner_client.py',
+               'tools/ci_scope.py', 'tests/test_ci_scope.py']
+    profile, tests = select(changed, ROOT)
+    assert profile == 'onboarding'
+    assert {'tests/test_onboarding_target.py', 'tests/test_onboarding_managed.py',
+            'tests/test_onboarding_owner_client.py', 'tests/test_onboarding_code_successor.py'} <= set(tests)
+    assert select(changed, tmp_path) == ('full', ['tests'])
+    assert select(changed + ['clusterctl/onboarding_sdk.py'], ROOT) == ('full', ['tests'])

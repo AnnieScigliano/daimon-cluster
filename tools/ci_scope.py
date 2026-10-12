@@ -240,6 +240,14 @@ HOME_WORKER_TESTS = ('tests/test_home_worker_successor.py', 'tests/test_onboardi
 def select(changed: list[str], root: Path) -> tuple[str, list[str]]:
     if not changed:
         return 'full', ['tests']
+    observation_tests = ('tests/test_onboarding_target.py', 'tests/test_onboarding_managed.py',
+        'tests/test_onboarding_owner_client.py', 'tests/test_onboarding_code_successor.py',
+        'tests/test_ci_scope.py', 'tests/test_ci_workflow.py')
+    if ('clusterctl/onboarding_target.py' in changed
+            and set(changed) <= {'clusterctl/onboarding_target.py',
+                                'tests/test_onboarding_owner_client.py'} | CI_FILES
+            and all((root/path).is_file() for path in observation_tests)):
+        return 'onboarding', list(observation_tests)
     if ('tools/build_home_worker_successor.py' in changed
             and set(changed) <= HOME_WORKER_FILES | CI_FILES
             and all((root/path).is_file() for path in HOME_WORKER_TESTS)):

@@ -357,7 +357,8 @@ def test_interrupted_partial_publication_reuses_exact_client(native):
     assert client.stat().st_ino == before
 
 
-def test_slow_authenticated_native_daemon_is_not_treated_as_departed(native):
+@pytest.mark.parametrize('observer', ['owner-client', 'runtime-presence'])
+def test_slow_authenticated_native_daemon_is_not_treated_as_departed(native, observer):
     import socket
     import threading
     import time
@@ -411,9 +412,14 @@ def test_slow_authenticated_native_daemon_is_not_treated_as_departed(native):
     thread = threading.Thread(target=forward)
     thread.start()
     try:
-        result = invoke(payload)
-        assert result.returncode == 0, result.stderr
-        assert json.loads(result.stdout)["installed"] is True
+        if observer == 'owner-client':
+            result = invoke(payload)
+            assert result.returncode == 0, result.stderr
+            assert json.loads(result.stdout)["installed"] is True
+        else:
+            result = target.running()
+            assert result['origin'] == payload['origin']
+            assert result['schema'] == 'cluster-onboarding-runtime-presence/v1'
         assert not errors
     finally:
         stop.set()
