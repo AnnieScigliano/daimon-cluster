@@ -207,9 +207,38 @@ RECEIVING_RUNTIME_FILES = {'clusterctl/onboarding_peer.py', 'clusterctl/onboardi
     'tests/test_onboarding_peer.py', 'tests/test_onboarding_runtime.py'}
 
 
+HOME_FILES = {'clusterctl/homes/__init__.py', 'clusterctl/homes/policy.py',
+    'clusterctl/homes/sessions.py', 'clusterctl/homes/authority.py',
+    'clusterctl/homes/registry.py', 'clusterctl/homes/service.py',
+    'clusterctl/homes/host.py', 'clusterctl/homes/provision.py',
+    'clusterctl/homes/assets/home.css', 'docs/design/artifact-homes.md',
+    'clusterd/assets/fonts/space-grotesk-latin.woff2',
+    'clusterd/assets/fonts/OFL.txt', 'clusterd/assets/fonts/PROVENANCE.json',
+    'tests/test_home_access.py', 'tests/test_home_gateway.py', 'tests/test_home_host.py'}
+HOME_TESTS = ('tests/test_home_access.py', 'tests/test_home_gateway.py', 'tests/test_home_host.py',
+              'tests/test_auth.py', 'tests/test_ci_scope.py', 'tests/test_ci_workflow.py')
+
+
+HOME_PROVISION_FILES = HOME_FILES | {'clusterctl/onboarding_homes.py', 'clusterctl/onboarding_worker.py',
+    'tools/install_onboarding_worker.py', 'tests/test_onboarding_homes.py'}
+HOME_PROVISION_TESTS = HOME_TESTS + ('tests/test_onboarding_homes.py', 'tests/test_onboarding.py',
+    'tests/test_onboarding_progress.py', 'tests/test_onboarding_worker_install.py',
+    'tests/test_onboarding_host_ownership.py', 'tests/test_operational_assets.py')
+
+
 def select(changed: list[str], root: Path) -> tuple[str, list[str]]:
     if not changed:
         return 'full', ['tests']
+    if (set(changed) & {'clusterctl/onboarding_homes.py', 'clusterctl/onboarding_worker.py',
+                        'tools/install_onboarding_worker.py', 'tests/test_onboarding_homes.py'}
+            and set(changed) <= HOME_PROVISION_FILES | CI_FILES
+            and all((root/path).is_file() for path in HOME_PROVISION_TESTS)):
+        return 'homes', list(HOME_PROVISION_TESTS)
+    if (set(changed) & HOME_FILES and set(changed) <= HOME_FILES | CI_FILES
+            and all((root / path).is_file() for path in HOME_TESTS)):
+        # Home-only read authority retains auth and workflow contracts. Native
+        # custody, dependencies, admission and provisioning changes stay full.
+        return 'homes', list(HOME_TESTS)
     if set(changed) <= RUNBOOK_DOCS:
         return 'docs', []
     if set(changed) <= CI_FILES | RUNBOOK_DOCS:
