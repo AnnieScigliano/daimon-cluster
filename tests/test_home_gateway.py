@@ -396,6 +396,30 @@ def test_http_catalog_files_ranges_and_revocation_use_same_authority(tmp_path):
             assert get('/access/logout', token, method='POST', extra={
                 'Origin':'https://one.example','Content-Length':'0'})[0] == 200
             assert get(path, token)[0] == 404
+            # A browser form navigates back to the current anonymous home,
+            # retaining API JSON compatibility and private-read revocation.
+            browser_token = app.sessions.issue(
+                home="one", origin=home["public_url"],
+                subject=authority.actor("human-one"),
+            )
+            assert get(path, browser_token)[0] == 200
+            class NoRedirect(urllib.request.HTTPRedirectHandler):
+                def redirect_request(self, *args, **kwargs):
+                    return None
+            request = urllib.request.Request(gateway + '/access/logout', data=b'',
+                headers={'Host':'one.example', 'Origin':'https://one.example',
+                         'Accept':'text/html', 'Authorization':'Bearer ' + browser_token})
+            with pytest.raises(urllib.error.HTTPError) as redirect:
+                urllib.request.build_opener(NoRedirect).open(request)
+            assert redirect.value.code == 303
+            assert redirect.value.headers['Location'] == '/?signed-out=1'
+            assert 'Max-Age=0' in redirect.value.headers['Set-Cookie']
+            assert redirect.value.headers['Cache-Control'] == 'no-store'
+            redirect.value.close()
+            assert get(path, browser_token)[0] == 404
+            landing = get('/?signed-out=1')[1]
+            assert 'You’re signed out'.encode() in landing
+            assert b'Restricted title c' not in landing
             # A local publisher changing a public object without registering it
             # cannot retain access through either direct or legacy URLs.
             state["entries"][0]["visibility"] = "human"

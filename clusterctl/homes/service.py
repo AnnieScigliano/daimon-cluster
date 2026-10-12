@@ -397,7 +397,7 @@ def audience_view(entry, home):
     }
 
 
-def render(home, works, subject, vpn):
+def render(home, works, subject, vpn, *, signed_out=False):
     esc = html.escape
     cards = "".join(
         "<article><small>"
@@ -425,7 +425,13 @@ def render(home, works, subject, vpn):
         if subject
         else '<a href="/access">Sign in</a>'
     )
-    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(home["name"])} · Home</title><link rel="stylesheet" href="/home.css"></head><body><main><nav><span>DAIMON MATRIX</span>{auth}</nav><header><svg viewBox="0 0 88 48" aria-hidden="true"><ellipse cx="44" cy="24" rx="41" ry="17"/><ellipse cx="44" cy="24" rx="22" ry="22"/><circle cx="44" cy="24" r="4"/></svg><small>{esc(scope)}</small><h1>{esc(home["name"])}</h1><p>A shared starting place for ideas, experiments and things we make.</p><a href="{esc(home["vpn_url"], quote=True)}">Dedicated VPN space ↗</a></header><section class="works">{cards or "<p>Room for what comes next. Selected work will appear here as it is shared.</p>"}</section><nav class="ring" aria-label="Tribe web-ring">{rings}</nav><footer>Only work selected for your current access is shown. This page does not indicate current daimon activity.</footer></main></body></html>'''.encode()
+    notice = (
+        '<p role="status">You’re signed out. Only work available without your '
+        'personal access is shown.</p>'
+        if signed_out and not subject
+        else ''
+    )
+    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(home["name"])} · Home</title><link rel="stylesheet" href="/home.css"></head><body><main><nav><span>DAIMON MATRIX</span>{auth}</nav>{notice}<header><svg viewBox="0 0 88 48" aria-hidden="true"><ellipse cx="44" cy="24" rx="41" ry="17"/><ellipse cx="44" cy="24" rx="22" ry="22"/><circle cx="44" cy="24" r="4"/></svg><small>{esc(scope)}</small><h1>{esc(home["name"])}</h1><p>A shared starting place for ideas, experiments and things we make.</p><a href="{esc(home["vpn_url"], quote=True)}">Dedicated VPN space ↗</a></header><section class="works">{cards or "<p>Room for what comes next. Selected work will appear here as it is shared.</p>"}</section><nav class="ring" aria-label="Tribe web-ring">{rings}</nav><footer>Only work selected for your current access is shown. This page does not indicate current daimon activity.</footer></main></body></html>'''.encode()
 
 
 def preview(app, home, reference, version, subject, vpn, *, origin, parent_token, display_mode="details"):
@@ -521,7 +527,7 @@ def handler(app, *, owner=False):
             self._headers_sent = True
             super().end_headers()
 
-        def respond(self, status, body, kind="application/json", cookies=()):
+        def respond(self, status, body, kind="application/json", cookies=(), headers=()):
             if isinstance(body, dict):
                 body = json.dumps(body).encode()
             self.send_response(status)
@@ -547,6 +553,8 @@ def handler(app, *, owner=False):
             )
             for cookie in cookies:
                 self.send_header("Set-Cookie", cookie)
+            for name, value in headers:
+                self.send_header(name, value)
             self.end_headers()
             if self.command != "HEAD":
                 self.wfile.write(body)
@@ -614,6 +622,9 @@ def handler(app, *, owner=False):
                             ],
                             subject,
                             vpn,
+                            signed_out=parse_qs(urlsplit(self.path).query).get(
+                                "signed-out"
+                            ) == ["1"],
                         ),
                         "text/html; charset=utf-8",
                     )
@@ -905,12 +916,14 @@ def handler(app, *, owner=False):
                 path = urlsplit(self.path).path
                 if path == "/access/logout":
                     app.sessions.revoke(home=home, token=token)
+                    browser = "text/html" in self.headers.get("Accept", "")
                     self.respond(
-                        200,
-                        {"status": "signed-out"},
+                        303 if browser else 200,
+                        b"" if browser else {"status": "signed-out"},
                         cookies=(
                             "__Host-home=; Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=0",
                         ),
+                        headers=(("Location", "/?signed-out=1"),) if browser else (),
                     )
                 elif path == "/access/claim":
                     from urllib.parse import parse_qs
