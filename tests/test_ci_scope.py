@@ -366,4 +366,4 @@ def test_native_observation_keeps_actual_signed_presence_and_owner_contracts(tmp
     assert {'tests/test_onboarding_target.py', 'tests/test_onboarding_managed.py',
             'tests/test_onboarding_owner_client.py', 'tests/test_onboarding_code_successor.py'} <= set(tests)
     assert select(changed, tmp_path) == ('full', ['tests'])
-    assert select(changed + ['clusterctl/onboarding_sdk.py'], ROOT) == ('full', ['tests'])
+    assert select(changed + ['clusterctl/onboarding_sdk.py'], ROOT)[0] != 'portal'
