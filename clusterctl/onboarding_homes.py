@@ -390,6 +390,7 @@ class IncusProvider:
             "daimon-home-public",
             {
                 "type": "proxy",
+                "bind": "host",
                 "listen": f"tcp:127.0.0.1:{port}",
                 "connect": "tcp:127.0.0.1:"
                 + str(declaration["binding"]["public_port"]),
