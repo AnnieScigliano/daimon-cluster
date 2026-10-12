@@ -16,7 +16,7 @@ const fs=require('fs'), vm=require('vm'), assert=require('assert');
 const child={}, listeners={}, clicks=[];
 const file='media/'+'e'.repeat(64)+'.wav';
 const root='/works/'+'a'.repeat(32)+'/'+'b'.repeat(64)+'/';
-const frame={contentWindow:child,dataset:{src:'https://content.example/r/selected/index.html',downloadRoot:root,downloadFiles:JSON.stringify([file])},src:''};
+const frame={contentWindow:child,addEventListener(){},dataset:{src:'https://content.example/r/selected/index.html',downloadRoot:root,downloadFiles:JSON.stringify([file])},src:''};
 const context={URL,location:{hash:'',pathname:'/view/selected',search:'?display=work'},history:{replaceState(){}},
 document:{querySelector:()=>frame,body:{append(){}},createElement:()=>({click(){clicks.push(this.href)},remove(){}})},
 window:{addEventListener:(name,callback)=>listeners[name]=callback}};

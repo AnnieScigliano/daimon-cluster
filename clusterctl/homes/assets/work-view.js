@@ -13,6 +13,9 @@ if (frame) {
     }
   }
   openFragment();
+  frame.addEventListener('load', () => {
+    frame.contentWindow.postMessage({type:'home-artifact:capabilities', downloads:true}, '*');
+  });
   window.addEventListener('hashchange', openFragment);
   window.addEventListener('message', event => {
     if (event.source !== frame.contentWindow || event.origin !== 'null') return;
