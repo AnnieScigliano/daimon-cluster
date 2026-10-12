@@ -200,7 +200,7 @@ class Backend:
 
 
 class Application:
-    def __init__(self, config, authority, sessions, *, backends=None):
+    def __init__(self, config, authority, sessions, *, backends=None, passkey_rp_id=None):
         self.config, self.homes, self.authority, self.sessions = (
             config,
             config["homes"],
@@ -226,6 +226,10 @@ class Application:
                     token=private_text(home["owner_token_file"]),
                 )
         self.locks = {ref: threading.RLock() for ref in self.homes}
+        self.passkeys = None
+        if passkey_rp_id:
+            from .passkeys import Passkeys
+            self.passkeys = Passkeys(self, passkey_rp_id)
 
     def identity(self, token, home, origin):
         row = self.sessions.resolve(token, home=home, origin=origin)
@@ -397,7 +401,7 @@ def audience_view(entry, home):
     }
 
 
-def render(home, works, subject, vpn, *, signed_out=False):
+def render(home, works, subject, vpn, *, signed_out=False, passkeys=False, key_revoked=False):
     esc = html.escape
     cards = "".join(
         "<article><small>"
@@ -425,12 +429,16 @@ def render(home, works, subject, vpn, *, signed_out=False):
         if subject
         else '<a href="/access">Sign in</a>'
     )
+    if passkeys and subject and subject.kind == 'human' and not vpn:
+        auth = '<a href="/access/keys">Access keys</a>' + auth
     notice = (
         '<p role="status">You’re signed out. Only work available without your '
         'personal access is shown.</p>'
         if signed_out and not subject
         else ''
     )
+    if key_revoked:
+        notice = '<p role="status">Access key revoked. Sessions opened with it are closed.</p>'
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(home["name"])} · Home</title><link rel="stylesheet" href="/home.css"></head><body><main><nav><span>DAIMON MATRIX</span>{auth}</nav>{notice}<header><svg viewBox="0 0 88 48" aria-hidden="true"><ellipse cx="44" cy="24" rx="41" ry="17"/><ellipse cx="44" cy="24" rx="22" ry="22"/><circle cx="44" cy="24" r="4"/></svg><small>{esc(scope)}</small><h1>{esc(home["name"])}</h1><p>A shared starting place for ideas, experiments and things we make.</p><a href="{esc(home["vpn_url"], quote=True)}">Dedicated VPN space ↗</a></header><section class="works">{cards or "<p>Room for what comes next. Selected work will appear here as it is shared.</p>"}</section><nav class="ring" aria-label="Tribe web-ring">{rings}</nav><footer>Only work selected for your current access is shown. This page does not indicate current daimon activity.</footer></main></body></html>'''.encode()
 
 
@@ -508,6 +516,22 @@ def preview(app, home, reference, version, subject, vpn, *, origin, parent_token
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(selected["title"])} · {esc(app.homes[home]["name"])}</title><link rel="stylesheet" href="/home.css"></head><body><main><a href="/">← Home</a><header><small>{esc(selected["visibility"])} · {"Current version" if version == "current" else "Earlier version"}</small><h1>{esc(selected["title"])}</h1><p>{esc(selected["summary"])}</p><a href="{esc(source, quote=True)}">Open selected work ↗</a></header>{display}<details><summary>Selected files</summary><ul>{files}</ul></details><details><summary>Versions available to you</summary><ul>{"".join(versions)}</ul></details></main></body></html>'''.encode()
 
 
+def key_page(app, subject=None):
+    mode = 'register' if subject else 'login'
+    if subject:
+        rows = ''.join('<li>' + html.escape(k['label']) +
+            ' <button type="button" data-revoke="' + html.escape(k['id'], quote=True) +
+            '">Revoke</button></li>' for k in app.passkeys.list(subject))
+        heading = 'Use your phone to sign in'
+        copy = 'Add a passkey after a recent sign-in. Your phone can use a fingerprint, face or device PIN. The same key identifies you across our homes; each work keeps its permissions.'
+        button = 'Activate access with my phone'
+        extra = '<h2>Your access keys</h2><ul>' + (rows or '<li>No keys yet.</li>') + '</ul><p>Revoking a key also ends sessions opened with it in every home. Synced copies of that key are revoked together.</p>'
+    else:
+        heading, copy, button = 'Welcome back', 'Use a saved passkey to sign in with your phone.', 'Sign in with a passkey'
+        extra = ''
+    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/home.css"><script src="/passkeys.js" defer></script><title>Access keys · Daimon Matrix</title></head><body><main><a href="/">← Home</a><h1>{heading}</h1><p>{copy}</p><button type="button" id="passkey-action" data-mode="{mode}">{button}</button><p id="passkey-status" role="status" aria-live="polite"></p>{extra}<p><a href="/access">Use an approved code instead</a></p><p>Keep this recovery route if you lose your phone. Biometrics stay on your device.</p></main></body></html>'''.encode()
+
+
 def handler(app, *, owner=False):
     class Handler(BaseHTTPRequestHandler):
         def setup(self):
@@ -532,12 +556,14 @@ def handler(app, *, owner=False):
             # Browser form POSTs under no-referrer serialize their Origin as
             # null. Keep same-origin proofs while disclosing no cross-site URL.
             self.send_header("Referrer-Policy", "same-origin")
+            self.send_header("Permissions-Policy",
+                             "publickey-credentials-create=(self), publickey-credentials-get=(self)")
             frames = " ".join(
                 app.config.get(k, "") for k in ("content_public_url", "content_vpn_url")
             )
             self.send_header(
                 "Content-Security-Policy",
-                "default-src 'self'; frame-src "
+                "default-src 'self'; script-src 'self'; frame-src "
                 + frames
                 + "; img-src 'self' "
                 + frames
@@ -619,6 +645,8 @@ def handler(app, *, owner=False):
                             signed_out=parse_qs(urlsplit(self.path).query).get(
                                 "signed-out"
                             ) == ["1"],
+                            passkeys=bool(app.passkeys),
+                            key_revoked=parse_qs(urlsplit(self.path).query).get('key-revoked') == ['1'],
                         ),
                         "text/html; charset=utf-8",
                     )
@@ -659,6 +687,17 @@ def handler(app, *, owner=False):
                         ),
                         "text/html; charset=utf-8",
                     )
+                elif path == "/passkeys.js" and app.passkeys:
+                    self.respond(200, (Path(__file__).parent / 'assets' / 'passkeys.js').read_bytes(),
+                                 'text/javascript; charset=utf-8')
+                elif path == "/access/passkey" and app.passkeys and not vpn:
+                    app.passkeys.trusted(home, origin)
+                    self.respond(200, key_page(app), 'text/html; charset=utf-8')
+                elif path == "/access/keys" and app.passkeys and not vpn:
+                    app.passkeys.trusted(home, origin)
+                    if not subject or subject.kind != 'human' or self.headers.get('Authorization'):
+                        raise ValueError('human_browser_required')
+                    self.respond(200, key_page(app, subject), 'text/html; charset=utf-8')
                 elif path == "/home.css":
                     self.respond(
                         200,
@@ -685,6 +724,8 @@ def handler(app, *, owner=False):
                     code = request["code"]
                     home_name = html.escape(app.homes[home]["name"])
                     body = f'''<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/home.css"><title>Sign in · {home_name}</title><main><a href="/">← Home</a><h1>Open your shared space</h1><p>Send this code to your own daimon in your existing conversation:</p><p><strong>{code}</strong></p><p>Ask them to approve your browser for {home_name}. The code expires in 15 minutes. Approval proves who you are; each resource keeps its selected audience.</p><form method="post" action="/access/claim"><input name="code" type="hidden" value="{code}"><button>Continue after approval</button></form></main></html>'''.encode()
+                    if app.passkeys and not vpn:
+                        body = body.replace(b'<h1>', b'<p><a href="/access/passkey">Sign in with a passkey</a></p><h1>', 1)
                     self.respond(
                         200,
                         body,
@@ -756,6 +797,7 @@ def handler(app, *, owner=False):
                                 self.send_header(name, response.headers[name])
                         self.send_header("Cache-Control", "no-store")
                         self.send_header("X-Content-Type-Options", "nosniff")
+                        self.send_header("Permissions-Policy", "publickey-credentials-create=(), publickey-credentials-get=()")
                         self.send_header("Referrer-Policy", "no-referrer")
                         content_type = response.headers.get("Content-Type", "").split(
                             ";"
@@ -848,6 +890,7 @@ def handler(app, *, owner=False):
                 )
                 self.send_header("Cache-Control", "no-store")
                 self.send_header("X-Content-Type-Options", "nosniff")
+                self.send_header("Permissions-Policy", "publickey-credentials-create=(), publickey-credentials-get=()")
                 self.send_header("Referrer-Policy", "no-referrer")
                 self.send_header(
                     "Content-Security-Policy",
@@ -899,7 +942,42 @@ def handler(app, *, owner=False):
                 if self.headers.get("Origin") != origin:
                     raise ValueError("home_post_requires_exact_origin")
                 path = urlsplit(self.path).path
-                if path == "/access/logout":
+                if path.startswith('/access/passkeys/') and app.passkeys:
+                    if self.headers.get('Authorization') or vpn:
+                        raise ValueError('passkeys_require_browser_cookie')
+                    operation = path.removeprefix('/access/passkeys/')
+                    payload = json.loads(data)
+                    if not isinstance(payload, dict) or len(data) > 32768:
+                        raise ValueError('invalid_passkey_payload')
+                    browser_proof = cookies['__Host-home-proof'].value if cookies.get('__Host-home-proof') else ''
+                    if operation in ('register-options', 'login-options'):
+                        if payload:
+                            raise ValueError('unexpected_passkey_fields')
+                        result, proof = app.passkeys.begin(home=home, origin=origin,
+                            mode=operation.split('-')[0], token=token, browser_proof=browser_proof)
+                        self.respond(200, result, cookies=(f'__Host-home-passkey={proof}; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age=300',))
+                    elif operation in ('register-finish', 'login-finish'):
+                        if set(payload) != {'nonce', 'credential'}:
+                            raise ValueError('unexpected_passkey_fields')
+                        proof = cookies['__Host-home-passkey'].value if cookies.get('__Host-home-passkey') else ''
+                        result, session = app.passkeys.finish(home=home, origin=origin,
+                            mode=operation.split('-')[0], nonce=payload['nonce'], proof=proof,
+                            credential=payload['credential'], token=token, browser_proof=browser_proof)
+                        headers = ['__Host-home-passkey=; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age=0']
+                        if session:
+                            headers.append(f'__Host-home={session}; Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=604800')
+                        self.respond(200, result, cookies=tuple(headers))
+                    elif operation == 'revoke':
+                        if set(payload) != {'id'}:
+                            raise ValueError('unexpected_passkey_fields')
+                        app.passkeys.revoke(home=home, origin=origin, token=token,
+                            browser_proof=browser_proof, identifier=payload['id'])
+                        expired = () if app.identity(token, home, origin) else (
+                            '__Host-home=; Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=0',)
+                        self.respond(200, {'status':'revoked'}, cookies=expired)
+                    else:
+                        raise ValueError('unknown_passkey_operation')
+                elif path == "/access/logout":
                     app.sessions.revoke(home=home, token=token)
                     browser = "text/html" in self.headers.get("Accept", "")
                     self.respond(
@@ -949,6 +1027,7 @@ def handler(app, *, owner=False):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
+    parser.add_argument("--passkey-rp-id", help="Enable shared passkeys for exact configured public home origins")
     args = parser.parse_args()
     from daimon_matrix.messaging_config import protected_read
 
@@ -962,7 +1041,7 @@ def main():
         authority_source=Path(config["authority_source"]),
         human_rosters=registry.rosters,
     )
-    app = Application(config, authority, sessions)
+    app = Application(config, authority, sessions, passkey_rp_id=args.passkey_rp_id)
     servers = [
         ThreadingHTTPServer(("127.0.0.1", config[key]), handler(app, owner=owner))
         for key, owner in (("viewer_port", False), ("owner_port", True))
