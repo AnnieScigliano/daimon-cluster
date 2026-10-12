@@ -355,6 +355,10 @@ def test_http_catalog_files_ranges_and_revocation_use_same_authority(tmp_path):
             }
             assert {e["visibility"] for e in visible(other)} == {"public", "individual"}
             assert b"Restricted title c" not in get("/")[1]
+            # Trusted pages preserve same-origin browser form proofs without
+            # disclosing referrers to another origin. Uploaded bytes retain
+            # their independent no-referrer/sandbox policy below.
+            assert get('/access')[2]['Referrer-Policy'] == 'same-origin'
             path = "/works/" + "c" * 32 + "/current/index.html"
             assert get(path)[0] == 404 and get(path, method="HEAD")[0] == 404
             assert get(path, extra={"Range": "bytes=0-3"})[0] == 404
@@ -362,13 +366,18 @@ def test_http_catalog_files_ranges_and_revocation_use_same_authority(tmp_path):
             assert code == 206 and body == b"<p>S"
             assert "sandbox" in headers["Content-Security-Policy"]
             assert headers["Content-Disposition"] == "attachment"
+            assert headers['Referrer-Policy'] == 'no-referrer'
             assert "default-src 'none'" in headers["Content-Security-Policy"]
             assert get(path, token, extra={"Origin": "null"})[0] == 404
             assert get("/_home/state", token)[0] == 404
             assert get(path, token, extra={"Host": "other.example"})[0] == 404
             authority.members.clear()
             assert {e["visibility"] for e in visible(token)} == {"public", "human"}
-            app.sessions.revoke(home="one", token=token)
+            assert get('/access/logout', token, method='POST', extra={
+                'Origin':'null','Content-Length':'0'})[0] == 403
+            assert get(path, token)[0] == 200
+            assert get('/access/logout', token, method='POST', extra={
+                'Origin':'https://one.example','Content-Length':'0'})[0] == 200
             assert get(path, token)[0] == 404
             # A local publisher changing a public object without registering it
             # cannot retain access through either direct or legacy URLs.
