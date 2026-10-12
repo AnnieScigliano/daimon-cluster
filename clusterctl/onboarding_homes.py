@@ -17,7 +17,6 @@ import sqlite3
 import uuid
 
 from .onboarding import OnboardingError
-from .onboarding_acceptance import accepted_progress
 from .onboarding_progress import Progress
 
 
@@ -84,16 +83,33 @@ class AcceptedHomes:
                 "plan TEXT NOT NULL, selection TEXT NOT NULL, state TEXT NOT NULL)"
             )
 
+    def reconcile_committed(self, name):
+        """Home admission is independent of still-pending human acceptance."""
+        placement = self.placements.get(name)
+        if placement is None:
+            return {"state": "not-selected"}
+        try:
+            value = Progress(self.progress, worker_uid=self.worker_uid).read(
+                name, owner=placement['owner'])
+        except FileNotFoundError:
+            return {"state": "waiting", "reason": "home_admission_unconfirmed"}
+        return self(value)
+
     def __call__(self, value):
         value = Progress.validate(value)
         placement = self.placements.get(value["name"])
-        if not placement or not value["active"]:
+        if not placement or 'matrix' not in value['completed_steps']:
             return {"state": "not-selected"}
+        if placement['owner'] != value['owner'] or placement['plan_digest'] != value['plan_digest']:
+            raise OnboardingError('accepted_home_placement_required')
+        committed = Progress(self.progress, worker_uid=self.worker_uid).read(
+            value['name'], owner=placement['owner'])
         if (
             os.geteuid() != self.worker_uid
             or placement["owner"] != value["owner"]
             or placement["plan_digest"] != value["plan_digest"]
-            or not accepted_progress(self.progress, value, self.worker_uid)
+            or committed['plan_digest'] != value['plan_digest']
+            or 'matrix' not in committed['completed_steps']
         ):
             raise OnboardingError("accepted_home_placement_required")
         selected = hashlib.sha256(
@@ -165,6 +181,15 @@ class IncusProvider:
             or self.backend._environment(plan).state != "complete"
         ):
             raise OnboardingError("accepted_home_environment_required")
+        from .onboarding_managed import ManagedRuntime
+        managed = ManagedRuntime(self.backend)
+        if managed.observe(plan).state != 'complete':
+            raise OnboardingError('home_admission_unconfirmed')
+        expected = managed._expected(plan)
+        delivery = validate_delivery(placement['delivery'])
+        if (expected['being_ref'] != delivery['owner_being_ref']
+                or expected['being_ref'] != delivery['home']['owner_being_ref']):
+            raise OnboardingError('home_admission_owner_conflict')
         source = Path(placement["provider_file"])
         if sha(regular(source)) != placement["provider_sha256"]:
             raise OnboardingError("qualified_home_provider_required")
@@ -288,7 +313,7 @@ class IncusProvider:
         config_path = Path(details["gateway_config"])
         uid, gid = details["gateway_uid"], details["gateway_gid"]
         original = regular(config_path, uid=uid)
-        config = validate_config(json.loads(original))
+        config = validate_config(json.loads(original), credential_uid=uid)
         if home["owner_being_ref"] != details["owner_being_ref"]:
             raise OnboardingError("home_delivery_owner_conflict")
         binding = declaration["binding"]
@@ -301,7 +326,8 @@ class IncusProvider:
         ):
             raise OnboardingError("matching_home_receiving_binding_required")
         validate_config(
-            {**config, "homes": {**config["homes"], details["home_ref"]: home}}
+            {**config, "homes": {**config["homes"], details["home_ref"]: home}},
+            credential_uid=uid,
         )
         # Transport only the two resource-scoped home credentials, not any
         # Matrix, account, bot, SSH or custody material.

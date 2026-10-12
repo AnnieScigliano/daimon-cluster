@@ -42,10 +42,13 @@ class Worker:
 
     def _tick(self, name: str) -> dict:
         try:
+            reconcile = getattr(self.homes, 'reconcile_committed', None)
+            if reconcile:
+                reconcile(name)
             result = self.store.tick(name, self.backend())
             if self.publish:
                 self.publish(result)
-            if self.homes and result.get('active') is True:
+            if self.homes:
                 self.homes(result)
             return result
         except (OnboardingError, being_seed.SeedError, OSError, ValueError, TypeError, KeyError):

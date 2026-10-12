@@ -74,6 +74,24 @@ def configured(tmp_path):
     return config, value, run, HostBackend(config, run=run)
 
 
+def test_exact_receiving_mount_can_keep_its_existing_operational_alias(tmp_path):
+    _, value, run, backend = configured(tmp_path)
+    desired = {"type": "disk", "source": "/qualified/source", "path": "/opt/qualified-code",
+               "readonly": "true", "shift": "true"}
+    run.instances.append({"name": "dm-eko", "expanded_devices": {"existing-alias": desired.copy()}})
+    expected = {"generated-name": desired}
+    assert backend._mounted(value, expected)
+    for field in desired:
+        run.instances[0]["expanded_devices"]["existing-alias"][field] = "different"
+        assert not backend._mounted(value, expected)
+        run.instances[0]["expanded_devices"]["existing-alias"][field] = desired[field]
+    # An occupied canonical name with different contents is still a conflict.
+    run.instances[0]["expanded_devices"]["generated-name"] = {**desired, "source": "/foreign"}
+    with pytest.raises(OnboardingError, match="foreign_receiving_mount_preserved"):
+        backend._mounted(value, expected)
+    assert not run.calls
+
+
 @pytest.mark.parametrize("failed_command", [1, 2, 3, 4])
 def test_each_partial_effect_reconciles_without_recreating(tmp_path, failed_command):
     config, value, run, backend = configured(tmp_path)

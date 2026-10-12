@@ -98,5 +98,30 @@ The web-ring is an explicitly selected set of public homes, not discovery or an
 implicit social grant. Prepare exact service/config candidates with retained
 history and compatible rollback, and qualify a coherent candidate once.
 
+Home delivery follows the existing Matrix admission boundary, independently of
+later human conversation acceptance. The adapter reads the Root worker's
+committed progress, matches the approved owner and complete plan digest, and
+requires the validated completed-step prefix to include `matrix`. The provider
+also verifies the current host grant, environment and admitted runtime presence;
+its verified being must be the selected home owner. Missing evidence waits or
+refuses delivery. It never repairs or executes admission to satisfy this gate.
+Overall onboarding `active` remains false until its own acceptance completes.
+
+The optional `--home-placements` hook reconciles committed admission before an
+acceptance tick as well as after newly published progress. A later acceptance
+failure therefore does not prevent an already admitted body from receiving its
+home. Declarations retain exact source, skill and receiving-file hashes; retries
+preserve native sessions, instructions and artifact history.
+
+When the qualified worker uses older body dependencies, use
+`tools/build_home_worker_successor.py` with explicit full `--base-commit` and
+`--source-commit` selections. Its manifest identifies every resulting file and
+the bounded overlay: home modules, worker hook, host observation and installer.
+All other base files, including Matrix/Telegram/SDK pins, remain unchanged.
+Reuse the qualified dependency environment after checking the resulting worker
+against its existing configuration. The normal worker unit installer owns the
+unit replacement and predecessor backup. Do not update immutable body capsules
+or upgrade a bot merely to install the home provider.
+
 No terminal, desktop, administration-path change, native-session replacement,
 autonomous publication, peer attention or model wakeup belongs to this increment.
