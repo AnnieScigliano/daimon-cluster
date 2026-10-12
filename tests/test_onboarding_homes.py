@@ -84,7 +84,7 @@ def test_offline_approved_source_works_after_checkout_advances_and_preserves_ori
     )
 
 
-def test_home_hook_requires_committed_acceptance_and_retries_same_placement(tmp_path):
+def test_home_hook_requires_committed_admission_and_retries_same_placement(tmp_path):
     progress_path = tmp_path / "progress"
     progress_path.mkdir(mode=0o750)
     progress = Progress(progress_path, worker_uid=os.geteuid())
@@ -120,9 +120,10 @@ def test_home_hook_requires_committed_acceptance_and_retries_same_placement(tmp_
     )
     assert homes(pending)["state"] == "not-selected"
     worker = Worker(store, lambda: backend, publish=progress.publish)
-    for _ in range(8):
+    for _ in range(6):
         worker.once()
     accepted = progress.read("eko", owner="sai")
+    assert 'matrix' in accepted['completed_steps'] and accepted['active'] is False
     assert homes(accepted)["state"] == "complete" and len(calls) == 1
     assert homes(accepted)["retried"] is True and len(calls) == 1
     selection["owner"] = "another-human"
@@ -130,8 +131,21 @@ def test_home_hook_requires_committed_acceptance_and_retries_same_placement(tmp_
         homes(accepted)
     selection["owner"] = "sai"
     progress._file("eko").unlink()
-    with pytest.raises(OnboardingError, match="placement_required"):
+    with pytest.raises(FileNotFoundError):
         homes(accepted)
+
+
+def test_committed_home_reconciliation_survives_unrelated_acceptance_failure():
+    from types import SimpleNamespace
+    calls = []
+    class Homes:
+        def reconcile_committed(self, name):
+            calls.append(name)
+    def tick(*args):
+        raise OnboardingError('unrelated_acceptance_failure')
+    worker = Worker(SimpleNamespace(tick=tick), lambda: None, homes=Homes())
+    assert worker._tick('eko')['state'] == 'attention-required'
+    assert calls == ['eko']
 
 
 def test_local_provisioning_keeps_context_artifacts_and_exact_predecessors(tmp_path):
@@ -358,3 +372,50 @@ def test_typed_delivery_registers_shared_authority_and_retries_without_rebinding
     provider.deliver({"delivery": details}, declaration, "accepted-instance")
     assert len(host_restarts) == 1
     assert len(devices) == 2
+
+
+def test_worker_preflight_checks_selected_gateway_uid_without_reading_keys(tmp_path, monkeypatch):
+    from clusterctl.homes import service
+    from tests.test_home_host import configuration
+    config = configuration(tmp_path)
+    owner = os.geteuid()
+    # The root worker differs from the selected gateway owner; service reads
+    # still require the current UID, while worker preflight checks metadata.
+    monkeypatch.setattr(service.os, 'geteuid', lambda: owner + 1)
+    with pytest.raises(ValueError, match='private_home_credential_required'):
+        service.validate_config(config)
+    assert service.validate_config(config, credential_uid=owner) == config
+    with pytest.raises(ValueError, match='private_home_credential_required'):
+        service.validate_config(config, credential_uid=owner + 1)
+    def no_read(*args):
+        raise AssertionError('metadata preflight must not read credentials')
+    monkeypatch.setattr(service, 'private_text', no_read)
+    assert service.validate_config(config, credential_uid=owner) == config
+
+
+def test_provider_refuses_absent_or_different_admitted_being_before_guest_writes(monkeypatch):
+    from types import SimpleNamespace
+    from clusterctl.onboarding import Observation, digest
+    from clusterctl.onboarding_homes import IncusProvider
+    job = plan()
+    admission = {'state': 'absent', 'being_ref': 'being-other'}
+    class Managed:
+        def __init__(self, backend):
+            pass
+        def observe(self, selected):
+            assert selected == job
+            return Observation(admission['state'])
+        def _expected(self, selected):
+            return {'being_ref': admission['being_ref']}
+    monkeypatch.setattr('clusterctl.onboarding_managed.ManagedRuntime', Managed)
+    details = {'home': {'owner_being_ref': 'being-selected'}, 'owner_being_ref': 'being-selected'}
+    monkeypatch.setattr('clusterctl.onboarding_homes.validate_delivery', lambda value: value)
+    backend = SimpleNamespace(authorize=lambda *args: True,
+                              _environment=lambda p: Observation('complete'))
+    provider = IncusProvider(SimpleNamespace(_load=lambda name: {'plan': job}), backend)
+    placement = {'name': job['name'], 'plan_digest': digest(job), 'delivery': details}
+    with pytest.raises(OnboardingError, match='home_admission_unconfirmed'):
+        provider.reconcile(placement)
+    admission['state'] = 'complete'
+    with pytest.raises(OnboardingError, match='home_admission_owner_conflict'):
+        provider.reconcile(placement)

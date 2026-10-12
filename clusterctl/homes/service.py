@@ -30,7 +30,7 @@ from .sessions import Sessions
 MAX_MANIFEST = 8 * 1024 * 1024
 
 
-def validate_config(config):
+def validate_config(config, *, credential_uid=None):
     required = {
         "schema",
         "state",
@@ -111,7 +111,10 @@ def validate_config(config):
         for field in ("owner_token_file", "gateway_token_file"):
             if not isinstance(home[field], str) or not Path(home[field]).is_absolute():
                 raise ValueError("invalid_home_receiving_path")
-            private_text(home[field])
+            if credential_uid is None:
+                private_text(home[field])
+            else:
+                private_credential(home[field], uid=credential_uid)
         if not isinstance(home["ring"], list) or len(home["ring"]) > 256:
             raise ValueError("invalid_home_ring")
         for peer in home["ring"]:
@@ -124,6 +127,19 @@ def validate_config(config):
             origin(peer["url"])
         Backend(home)
     return config
+
+
+def private_credential(path, *, uid):
+    """Check an operator-selected gateway owner's file without reading its key."""
+    import stat
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        info = os.fstat(descriptor)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != uid
+                or info.st_mode & 0o077 or info.st_nlink != 1 or info.st_size > 1024):
+            raise ValueError("private_home_credential_required")
+    finally:
+        os.close(descriptor)
 
 
 def private_text(path):

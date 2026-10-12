@@ -226,11 +226,14 @@ HOME_PROVISION_TESTS = HOME_TESTS + ('tests/test_onboarding_homes.py', 'tests/te
     'tests/test_onboarding_host_ownership.py', 'tests/test_operational_assets.py')
 
 HOME_WORKER_FILES = {'clusterctl/onboarding_host.py', 'tests/test_onboarding_host.py',
-    'tools/build_home_worker_successor.py', 'tests/test_home_worker_successor.py'}
+    'tools/build_home_worker_successor.py', 'tests/test_home_worker_successor.py',
+    'clusterctl/onboarding_worker.py', 'clusterctl/onboarding_homes.py',
+    'clusterctl/homes/service.py', 'tests/test_onboarding_homes.py'}
 HOME_WORKER_TESTS = ('tests/test_home_worker_successor.py', 'tests/test_onboarding_host.py',
     'tests/test_onboarding_telegram.py', 'tests/test_onboarding_host_ownership.py',
     'tests/test_onboarding_homes.py', 'tests/test_onboarding_worker_install.py',
-    'tests/test_operational_assets.py', 'tests/test_ci_scope.py', 'tests/test_ci_workflow.py')
+    'tests/test_operational_assets.py', 'tests/test_ci_scope.py', 'tests/test_ci_workflow.py',
+    'tests/test_home_gateway.py', 'tests/test_home_access.py')
 
 
 def select(changed: list[str], root: Path) -> tuple[str, list[str]]:
