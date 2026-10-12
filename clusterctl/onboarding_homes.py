@@ -14,10 +14,46 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import uuid
 
 from .onboarding import OnboardingError
 from .onboarding_acceptance import accepted_progress
 from .onboarding_progress import Progress
+
+
+def selected_bundle(repository, commit, destination):
+    """Bundle an approved commit without changing the development checkout."""
+    import subprocess
+
+    reference = "refs/daimon-home/bundle-" + uuid.uuid4().hex
+    subprocess.run(
+        ["git", "-C", str(repository), "update-ref", reference, commit, "0" * 40],
+        check=True,
+        capture_output=True,
+    )
+    try:
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repository),
+                "bundle",
+                "create",
+                str(destination),
+                reference,
+            ],
+            check=True,
+            capture_output=True,
+            timeout=60,
+        )
+        Path(destination).chmod(0o600)
+    finally:
+        # A concurrent change is preserved, never force-deleted.
+        subprocess.run(
+            ["git", "-C", str(repository), "update-ref", "-d", reference, commit],
+            check=True,
+            capture_output=True,
+        )
 
 
 class AcceptedHomes:
@@ -118,7 +154,6 @@ class IncusProvider:
     def reconcile(self, placement):
         from .homes.provision import regular, sha
         from .onboarding import digest, validate_plan
-        import subprocess
         import tempfile
 
         record = self.store._load(placement["name"])
@@ -177,29 +212,7 @@ class IncusProvider:
             prefix="home-skill-bundle-", dir=self.store.root
         ) as temporary:
             bundle = Path(temporary) / "skills.bundle"
-            head = subprocess.run(
-                ["git", "-C", str(repository), "rev-parse", "HEAD"],
-                capture_output=True,
-                check=True,
-                text=True,
-            ).stdout.strip()
-            if head != placement["skills_commit"]:
-                raise OnboardingError("selected_home_repository_head_required")
-
-            subprocess.run(
-                [
-                    "git",
-                    "-C",
-                    str(repository),
-                    "bundle",
-                    "create",
-                    str(bundle),
-                    "HEAD",
-                ],
-                capture_output=True,
-                check=True,
-                timeout=60,
-            )
+            selected_bundle(repository, placement["skills_commit"], bundle)
             run(
                 [
                     "file",
@@ -214,12 +227,6 @@ class IncusProvider:
                     "0600",
                 ]
             )
-        initialize = (
-            'import pathlib,subprocess; p=pathlib.Path("/home/agent/.local/state/daimon-home/skills-source"); '
-            "p.parent.mkdir(parents=True,exist_ok=True); "
-            'subprocess.run(["git","init",str(p)],check=True,stdout=subprocess.DEVNULL); '
-            'subprocess.run(["git","-C",str(p),"fetch","/opt/daimon-home-provider/skills.bundle"],check=True,stdout=subprocess.DEVNULL)'
-        )
         run(
             [
                 "exec",
@@ -230,8 +237,13 @@ class IncusProvider:
                 "1000",
                 "--",
                 "python3",
-                "-c",
-                initialize,
+                destination + "/provision.py",
+                "--home",
+                "/home/agent",
+                "--repository",
+                "/home/agent/.local/state/daimon-home/skills-source",
+                "--source-bundle",
+                destination + "/skills.bundle",
             ]
         )
         run(

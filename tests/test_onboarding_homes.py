@@ -3,6 +3,7 @@
 import hashlib
 import json
 import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,74 @@ from clusterctl.onboarding_homes import AcceptedHomes
 from clusterctl.onboarding_progress import Progress
 from clusterctl.onboarding_worker import Worker
 from tests.test_onboarding import FixtureBackend, plan
+
+
+def test_offline_approved_source_works_after_checkout_advances_and_preserves_origin(
+    tmp_path,
+):
+    from clusterctl.onboarding_homes import selected_bundle
+    from clusterctl.homes.provision import initialize_source
+
+    repo = tmp_path / "development"
+    subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+
+    def git(*args):
+        return (
+            subprocess.check_output(
+                ["git", "-C", str(repo), *args], stderr=subprocess.DEVNULL
+            )
+            .decode()
+            .strip()
+        )
+
+    git("config", "user.email", "fixture@example.invalid")
+    git("config", "user.name", "Fixture")
+    (repo / "selected.txt").write_text("Approved source")
+    git("add", "selected.txt")
+    git("commit", "-m", "Approved")
+    selected = git("rev-parse", "HEAD")
+    (repo / "later.txt").write_text("Later unrelated development")
+    git("add", "later.txt")
+    git("commit", "-m", "Later")
+    latest = git("rev-parse", "HEAD")
+    bundle = tmp_path / "selected.bundle"
+    selected_bundle(repo, selected, bundle)
+    assert git("rev-parse", "HEAD") == latest
+    assert git("for-each-ref", "refs/daimon-home") == ""
+    home = tmp_path / "receiver"
+    home.mkdir(mode=0o700)
+    cache = home / ".local/state/daimon-home/skills-source"
+    initialize_source(home, cache, bundle)
+    initialize_source(home, cache, bundle)
+
+    def receiving(*args):
+        return (
+            subprocess.check_output(["git", "-C", str(cache), *args]).decode().strip()
+        )
+
+    assert (
+        receiving("config", "--get", "remote.origin.url")
+        == "https://github.com/AlterMundi/Skills.git"
+    )
+    assert receiving("show", selected + ":selected.txt") == "Approved source"
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(cache),
+            "remote",
+            "set-url",
+            "origin",
+            "https://another.example/repository",
+        ],
+        check=True,
+    )
+    with pytest.raises(ValueError, match="origin_preserved"):
+        initialize_source(home, cache, bundle)
+    assert (
+        receiving("config", "--get", "remote.origin.url")
+        == "https://another.example/repository"
+    )
 
 
 def test_home_hook_requires_committed_acceptance_and_retries_same_placement(tmp_path):
