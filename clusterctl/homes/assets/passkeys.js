@@ -3,6 +3,8 @@
 const action = document.getElementById("passkey-action");
 const status = document.getElementById("passkey-status");
 const buttons = document.querySelectorAll("button");
+for (const link of document.querySelectorAll("[data-code-login]"))
+  link.href = "/access?return=" + encodeURIComponent(location.pathname + location.search + location.hash);
 const decode = value => Uint8Array.from(atob(value.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
 const encode = value => btoa(String.fromCharCode(...new Uint8Array(value))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 function payload(credential) {
@@ -30,7 +32,9 @@ function failed(error) {
   }
   status.textContent = error.name === "NotAllowedError" || error.name === "AbortError"
     ? "Nothing changed. You can try again or use an approved code."
-    : "We couldn’t verify that access key. To add or revoke keys, sign in again with a passkey or a new approved code, then retry. Your existing access is unchanged.";
+    : action.dataset.mode === "login"
+      ? "We couldn’t sign in with that passkey. Try again or use an approved code."
+      : "We couldn’t verify that access key. To add or revoke keys, sign in again with a passkey or a new approved code, then retry. Your existing access is unchanged.";
 }
 if (!window.PublicKeyCredential || window.top !== window.self) {
   busy(true);
@@ -52,16 +56,10 @@ if (!window.PublicKeyCredential || window.top !== window.self) {
         : await navigator.credentials.get({publicKey: options});
       if (!credential) throw new Error("verification");
       await post(mode + "-finish", {nonce: start.nonce, credential: payload(credential)});
-      if (mode === "login") location.assign("/");
-      else {
-        status.textContent = "Access key saved. You can now sign out and sign in with a passkey. Use this page to revoke your key later.";
-        action.textContent = "Access key saved";
-        action.disabled = true;
-        const link = document.createElement("a");
-        link.href = "/access/keys";
-        link.textContent = "View my access keys";
-        status.append(document.createElement("br"), link);
-      }
+      if (mode === "login") {
+        if (action.dataset.reload === "true") location.reload();
+        else location.assign("/");
+      } else location.assign("/access/keys?registered=1");
     } catch (error) { failed(error); busy(false); }
   });
   for (const button of document.querySelectorAll("[data-revoke]"))

@@ -12,7 +12,7 @@ import pytest
 
 from clusterctl.homes.policy import Actor
 from clusterctl.homes.registry import Registry, version_digest
-from clusterctl.homes.service import Application, handler
+from clusterctl.homes.service import Application, handler, return_target, auth_controls, key_page
 from clusterctl.homes.sessions import Sessions
 
 
@@ -481,3 +481,50 @@ def test_owner_identity_approval_and_shared_roster_are_not_reader_powers(tmp_pat
     payload.update(expected_revision=1, readers=[], revoked=True)
     app.owner("one", "credential-one", "tribe-readers", payload)
     assert app.registry.rosters()["tribe"]["revoked"] is True
+
+
+@pytest.mark.parametrize('destination', ['https://other.example/', '//other.example/',
+    '/\\other.example/', '/%5cother.example/', '/%2fother.example/', '/hello%0a'])
+def test_browser_return_cannot_escape_home_origin(destination):
+    with pytest.raises(ValueError, match='invalid_home_return'):
+        return_target(destination)
+
+
+def test_direct_passkey_control_and_registration_refresh_notice():
+    from types import SimpleNamespace
+    controls, scripts = auth_controls(None, False, True, '/view/resource?version=older')
+    assert 'data-reload="true"' in controls and '>Sign in</button>' in controls
+    assert 'data-code-login' in controls and '/passkeys.js' in scripts
+    app = SimpleNamespace(passkeys=SimpleNamespace(list=lambda subject: [
+        {'id':'credential', 'label':'My phone'}]))
+    page = key_page(app, Actor('human', 'human', 'v1', 'Human'), registered=True)
+    assert b'Access key saved.' in page and b'data-revoke="credential"' in page
+
+
+def test_browser_code_claim_returns_to_same_local_destination(tmp_path):
+    class Empty:
+        def state(self): return {'schema':1, 'entries':[]}
+    authority = Authority()
+    home = {'owner_being_ref':'owner-one', 'owner_revision':'v1',
+        'public_url':'https://one.example', 'vpn_url':'https://private-one.example',
+        'name':'Home'}
+    app = Application({'homes':{'one':home}}, authority, Sessions(tmp_path/'state'),
+                      backends={'one':Empty()})
+    request, proof = app.sessions.request(home='one',origin=home['public_url'])
+    app.sessions.approve(home='one',code=request['code'],subject=authority.actor('human-one'))
+    from urllib.parse import urlencode
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *args, **kwargs): return None
+    with serving(handler(app)) as root:
+        payload = urlencode({'code':request['code'],'return':'/view/resource?version=older#part'}).encode()
+        headers = {'Host':'one.example','Origin':home['public_url'],
+                   'Accept':'text/html','Cookie':'__Host-home-proof='+proof}
+        with pytest.raises(urllib.error.HTTPError) as err:
+            urllib.request.build_opener(NoRedirect).open(urllib.request.Request(
+                root+'/access/claim',data=payload,headers=headers))
+        try:
+            assert err.value.code==303
+            assert err.value.headers['Location']=='/view/resource?version=older#part'
+            assert '__Host-home=' in err.value.headers['Set-Cookie']
+        finally:
+            err.value.close()
