@@ -225,10 +225,21 @@ HOME_PROVISION_TESTS = HOME_TESTS + ('tests/test_onboarding_homes.py', 'tests/te
     'tests/test_onboarding_progress.py', 'tests/test_onboarding_worker_install.py',
     'tests/test_onboarding_host_ownership.py', 'tests/test_operational_assets.py')
 
+HOME_WORKER_FILES = {'clusterctl/onboarding_host.py', 'tests/test_onboarding_host.py',
+    'tools/build_home_worker_successor.py', 'tests/test_home_worker_successor.py'}
+HOME_WORKER_TESTS = ('tests/test_home_worker_successor.py', 'tests/test_onboarding_host.py',
+    'tests/test_onboarding_telegram.py', 'tests/test_onboarding_host_ownership.py',
+    'tests/test_onboarding_homes.py', 'tests/test_onboarding_worker_install.py',
+    'tests/test_operational_assets.py', 'tests/test_ci_scope.py', 'tests/test_ci_workflow.py')
+
 
 def select(changed: list[str], root: Path) -> tuple[str, list[str]]:
     if not changed:
         return 'full', ['tests']
+    if ('tools/build_home_worker_successor.py' in changed
+            and set(changed) <= HOME_WORKER_FILES | CI_FILES
+            and all((root/path).is_file() for path in HOME_WORKER_TESTS)):
+        return 'homes', list(HOME_WORKER_TESTS)
     if (set(changed) & {'clusterctl/onboarding_homes.py', 'clusterctl/onboarding_worker.py',
                         'tools/install_onboarding_worker.py', 'tests/test_onboarding_homes.py'}
             and set(changed) <= HOME_PROVISION_FILES | CI_FILES

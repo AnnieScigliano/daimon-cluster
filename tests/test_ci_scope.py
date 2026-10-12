@@ -346,3 +346,13 @@ def test_homes_keep_read_auth_contracts_and_shared_changes_keep_full(tmp_path):
     assert select(sorted(HOME_FILES)+['clusterd/auth.py'],ROOT)==('full',['tests'])
     assert select(sorted(HOME_FILES)+['clusterctl/homes/unknown.py'],ROOT)==('full',['tests'])
     assert select(sorted(HOME_FILES),tmp_path)==('full',['tests'])
+
+
+def test_home_worker_composition_keeps_qualification_and_mount_boundaries(tmp_path):
+    from tools.ci_scope import HOME_WORKER_FILES, HOME_WORKER_TESTS
+    changed = sorted(HOME_WORKER_FILES | {'tools/ci_scope.py', 'tests/test_ci_scope.py'})
+    assert select(changed, ROOT) == ('homes', list(HOME_WORKER_TESTS))
+    assert select(changed, tmp_path) == ('full', ['tests'])
+    for name in ('clusterctl/onboarding_sdk.py', 'clusterctl/onboarding_telegram.py',
+                 'requirements-weave.txt', 'clusterctl/onboarding_target.py'):
+        assert select(changed + [name], ROOT) == ('full', ['tests'])
