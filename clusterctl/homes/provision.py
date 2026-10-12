@@ -135,6 +135,50 @@ def owner_pointer(original, public_url):
     return original + paragraph.encode()
 
 
+def initialize_source(home, repository, bundle):
+    """An offline source cache retains the maintained installer's provenance."""
+    home, repository, bundle = map(Path, (home, repository, bundle))
+    if repository != home / ".local/state/daimon-home/skills-source":
+        raise ValueError("dedicated_home_source_cache_required")
+    regular(bundle)
+    directory(repository, home, strict=False)
+    subprocess.run(["git", "init", str(repository)], check=True, capture_output=True)
+    origin = subprocess.run(
+        ["git", "-C", str(repository), "config", "--get", "remote.origin.url"],
+        capture_output=True,
+        text=True,
+    )
+    expected = "https://github.com/AlterMundi/Skills.git"
+    if origin.returncode == 1:
+        subprocess.run(
+            ["git", "-C", str(repository), "remote", "add", "origin", expected],
+            check=True,
+            capture_output=True,
+        )
+    elif origin.returncode != 0 or origin.stdout.strip() != expected:
+        raise ValueError("existing_home_source_origin_preserved")
+    heads = (
+        subprocess.check_output(["git", "bundle", "list-heads", str(bundle)])
+        .decode()
+        .splitlines()
+    )
+    if len(heads) != 1:
+        raise ValueError("selected_home_bundle_reference_required")
+    fields = heads[0].split()
+    if (
+        len(fields) != 2
+        or not re.fullmatch("[a-f0-9]{40}", fields[0])
+        or not re.fullmatch("refs/daimon-home/bundle-[a-f0-9]{32}", fields[1])
+    ):
+        raise ValueError("selected_home_bundle_reference_required")
+    subprocess.run(
+        ["git", "-C", str(repository), "fetch", str(bundle), fields[1]],
+        check=True,
+        capture_output=True,
+        timeout=60,
+    )
+
+
 def install_skill(repository, commit, home, state):
     if not re.fullmatch("[a-f0-9]{40}", commit):
         raise ValueError("immutable_home_skill_commit_required")
@@ -340,9 +384,16 @@ def main():
     parser.add_argument("--declaration", type=Path)
     parser.add_argument("--repository", type=Path)
     parser.add_argument("--unit-file", type=Path)
+    parser.add_argument("--source-bundle", type=Path)
     parser.add_argument("--previous-unit-sha256")
     args = parser.parse_args()
     try:
+        if args.source_bundle:
+            if not args.home or not args.repository:
+                raise ValueError("complete_home_source_selection_required")
+            initialize_source(args.home, args.repository, args.source_bundle)
+            print(json.dumps({"status": "source-ready"}))
+            return
         if args.unit_file:
             if os.geteuid() != 0:
                 raise ValueError("home_service_operator_required")
