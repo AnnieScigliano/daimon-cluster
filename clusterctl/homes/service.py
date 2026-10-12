@@ -517,6 +517,9 @@ def preview(app, home, reference, version, subject, vpn, *, origin, parent_token
     if display_mode == "work":
         if display.startswith('<iframe '):
             display = display.replace(' src="', ' data-src="', 1)
+            media_files = [name for name in selected["files"] if re.fullmatch(r"media/[a-f0-9]{64}\.[a-z0-9]{1,8}", name)]
+            download_root = "/works/" + reference + "/" + selected["version_ref"] + "/"
+            display = display.replace('<iframe ', '<iframe data-download-root="' + esc(download_root, quote=True) + '" data-download-files="' + esc(json.dumps(media_files), quote=True) + '" ', 1)
         return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(selected["title"])} · {esc(app.homes[home]["name"])}</title><link rel="stylesheet" href="/home.css"><script src="/work-view.js" defer></script></head><body class="work-view">{display}</body></html>'''.encode()
     versions = ['<li><a href="/view/' + reference + '">Current version</a></li>']
     for previous in reversed(current.get("versions", [])):

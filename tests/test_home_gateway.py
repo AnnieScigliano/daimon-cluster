@@ -267,6 +267,9 @@ def test_http_catalog_files_ranges_and_revocation_use_same_authority(tmp_path):
             ]
         )
     ]
+    media_file = "media/" + "e" * 64 + ".wav"
+    entries[0]["files"].append(media_file)
+    entries[0]["version_ref"] = version_digest(entries[0])
     state = {"schema": 1, "entries": entries}
 
     class Origin(BaseHTTPRequestHandler):
@@ -365,6 +368,8 @@ def test_http_catalog_files_ranges_and_revocation_use_same_authority(tmp_path):
             assert b"https://content.example/r/" in body
             assert b"Selected files" not in body and b"Versions available" not in body
             assert b"/work-view.js" in body
+            assert ("data-download-root=\"/works/" + "a" * 32 + "/" + entries[0]["version_ref"] + "/\"").encode() in body
+            assert media_file.encode() in body
             private_view = "/view/" + "c" * 32 + "?display=work"
             assert get(private_view)[0] == 404
             assert get(private_view, token)[0] == 200
