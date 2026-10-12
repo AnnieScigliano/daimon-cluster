@@ -135,3 +135,13 @@ correction, not a reason to weaken file validation.
 Manual owner command syntax is `reply --source ID --revision REVISION --id UUID
 --text TEXT`, `retry UUID`, and `publication UUID`. Installed local guides must
 match the selected package parser. Keep the operation UUID on retries.
+
+## Peer delivery recovery SDK
+
+The selected SDK includes the bounded diagnostics and exact logical recovery
+from [Matrix#317](https://github.com/AlterMundi/daimon-matrix/pull/317).
+Source uses its real VCS installation provenance matching the declared pin;
+a plain wheel environment is qualified for receiving use only when paired with
+the supported hash-locked wheelhouse and installation receipt. Keep both guards
+and the original receiving SDK. Native stores and proof keys remain intact;
+diagnostic sidecars carry observations without granting transmission authority.
