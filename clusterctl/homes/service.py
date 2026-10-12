@@ -428,7 +428,9 @@ def render(home, works, subject, vpn):
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(home["name"])} · Home</title><link rel="stylesheet" href="/home.css"></head><body><main><nav><span>DAIMON MATRIX</span>{auth}</nav><header><svg viewBox="0 0 88 48" aria-hidden="true"><ellipse cx="44" cy="24" rx="41" ry="17"/><ellipse cx="44" cy="24" rx="22" ry="22"/><circle cx="44" cy="24" r="4"/></svg><small>{esc(scope)}</small><h1>{esc(home["name"])}</h1><p>A shared starting place for ideas, experiments and things we make.</p><a href="{esc(home["vpn_url"], quote=True)}">Dedicated VPN space ↗</a></header><section class="works">{cards or "<p>Room for what comes next. Selected work will appear here as it is shared.</p>"}</section><nav class="ring" aria-label="Tribe web-ring">{rings}</nav><footer>Only work selected for your current access is shown. This page does not indicate current daimon activity.</footer></main></body></html>'''.encode()
 
 
-def preview(app, home, reference, version, subject, vpn, *, origin, parent_token):
+def preview(app, home, reference, version, subject, vpn, *, origin, parent_token, display_mode="details"):
+    if display_mode not in ("details", "work"):
+        raise ValueError("invalid_display_mode")
     selected = app.selected(home, reference, version, subject, vpn)
     if not selected or selected["kind"] != "artifact":
         raise ValueError("preview_denied")
@@ -478,6 +480,10 @@ def preview(app, home, reference, version, subject, vpn, *, origin, parent_token
             + esc(selected["title"], quote=True)
             + '"></iframe>'
         )
+    if display_mode == "work":
+        if display.startswith('<iframe '):
+            display = display.replace(' src="', ' data-src="', 1)
+        return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(selected["title"])} · {esc(app.homes[home]["name"])}</title><link rel="stylesheet" href="/home.css"><script src="/work-view.js" defer></script></head><body class="work-view">{display}</body></html>'''.encode()
     versions = ['<li><a href="/view/' + reference + '">Current version</a></li>']
     for previous in reversed(current.get("versions", [])):
         if app.policy.allows(previous, home=home, subject=subject, dedicated_vpn=vpn):
@@ -629,11 +635,13 @@ def handler(app, *, owner=False):
                         raise ValueError("invalid_resource_reference")
                     query = parse_qs(urlsplit(self.path).query, strict_parsing=True)
                     if (
-                        set(query) - {"version"}
+                        set(query) - {"version", "display"}
                         or len(query.get("version", ["current"])) != 1
+                        or len(query.get("display", ["details"])) != 1
                     ):
                         raise ValueError("invalid_version_query")
                     version = query.get("version", ["current"])[0]
+                    display_mode = query.get("display", ["details"])[0]
                     self.respond(
                         200,
                         preview(
@@ -645,8 +653,15 @@ def handler(app, *, owner=False):
                             vpn,
                             origin=origin,
                             parent_token=parent_token,
+                            display_mode=display_mode,
                         ),
                         "text/html; charset=utf-8",
+                    )
+                elif path == "/work-view.js":
+                    self.respond(
+                        200,
+                        (Path(__file__).parent / "assets" / "work-view.js").read_bytes(),
+                        "text/javascript; charset=utf-8",
                     )
                 elif path == "/home.css":
                     self.respond(

@@ -313,7 +313,7 @@ def test_http_catalog_files_ranges_and_revocation_use_same_authority(tmp_path):
             "name": "Home",
         }
         app = Application(
-            {"homes": {"one": home}}, authority, Sessions(tmp_path / "state")
+            {"homes": {"one": home}, "content_public_url": "https://content.example", "content_vpn_url": "https://private-content.example"}, authority, Sessions(tmp_path / "state")
         )
         app.owner("one", "home-owner", "sync", {})
         token = app.sessions.issue(
@@ -355,6 +355,23 @@ def test_http_catalog_files_ranges_and_revocation_use_same_authority(tmp_path):
             }
             assert {e["visibility"] for e in visible(other)} == {"public", "individual"}
             assert b"Restricted title c" not in get("/")[1]
+            # Work presentation uses the same selected-resource evaluator and
+            # isolated child context, with no publication controls around it.
+            view = "/view/" + "a" * 32
+            assert b"Selected files" in get(view)[1]
+            code, body, _ = get(view + "?display=work")
+            assert code == 200 and b'class="work-view"' in body
+            assert b'sandbox="allow-scripts"' in body
+            assert b"https://content.example/r/" in body
+            assert b"Selected files" not in body and b"Versions available" not in body
+            assert b"/work-view.js" in body
+            private_view = "/view/" + "c" * 32 + "?display=work"
+            assert get(private_view)[0] == 404
+            assert get(private_view, token)[0] == 200
+            assert get(view + "?display=unknown")[0] == 404
+            assert get(view + "?display=work&display=details")[0] == 404
+            assert get(view + "?display=work&version=" + "0" * 64)[0] == 404
+            assert get("/work-view.js")[2]["Content-Type"].startswith("text/javascript")
             # Trusted pages preserve same-origin browser form proofs without
             # disclosing referrers to another origin. Uploaded bytes retain
             # their independent no-referrer/sandbox policy below.
