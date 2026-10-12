@@ -284,6 +284,7 @@ def test_typed_delivery_registers_shared_authority_and_retries_without_rebinding
         == b"fixture-owner.key"
     )
     assert devices["daimon-home-owner"]["bind"] == "instance"
+    assert devices["daimon-home-public"]["bind"] == "host"
     assert any(argv[-1] == "sync" for argv in executions)
     provider.deliver({"delivery": details}, declaration, "accepted-instance")
     assert len(host_restarts) == 1
