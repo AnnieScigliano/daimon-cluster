@@ -362,7 +362,7 @@ def test_native_observation_keeps_actual_signed_presence_and_owner_contracts(tmp
     changed = ['clusterctl/onboarding_target.py', 'tests/test_onboarding_owner_client.py',
                'tools/ci_scope.py', 'tests/test_ci_scope.py']
     profile, tests = select(changed, ROOT)
-    assert profile == 'onboarding'
+    assert profile == 'portal'
     assert {'tests/test_onboarding_target.py', 'tests/test_onboarding_managed.py',
             'tests/test_onboarding_owner_client.py', 'tests/test_onboarding_code_successor.py'} <= set(tests)
     assert select(changed, tmp_path) == ('full', ['tests'])

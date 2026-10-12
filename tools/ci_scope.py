@@ -247,7 +247,7 @@ def select(changed: list[str], root: Path) -> tuple[str, list[str]]:
             and set(changed) <= {'clusterctl/onboarding_target.py',
                                 'tests/test_onboarding_owner_client.py'} | CI_FILES
             and all((root/path).is_file() for path in observation_tests)):
-        return 'onboarding', list(observation_tests)
+        return 'portal', list(observation_tests)
     if ('tools/build_home_worker_successor.py' in changed
             and set(changed) <= HOME_WORKER_FILES | CI_FILES
             and all((root/path).is_file() for path in HOME_WORKER_TESTS)):
