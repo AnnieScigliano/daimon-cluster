@@ -398,6 +398,7 @@ def test_http_catalog_files_ranges_and_revocation_use_same_authority(tmp_path):
             assert redirect.value.headers['Location'] == '/?signed-out=1'
             assert 'Max-Age=0' in redirect.value.headers['Set-Cookie']
             assert redirect.value.headers['Cache-Control'] == 'no-store'
+            redirect.value.close()
             assert get(path, browser_token)[0] == 404
             landing = get('/?signed-out=1')[1]
             assert 'You’re signed out'.encode() in landing
