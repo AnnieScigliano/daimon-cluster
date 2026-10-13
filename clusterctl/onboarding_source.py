@@ -258,7 +258,7 @@ def child() -> int:
                 from types import SimpleNamespace
                 group = onboarding_peer.observed_group(SimpleNamespace(
                     root=source.outputs, package=source.outputs),
-                    being_seed._read(source.root / 'runtime.json'), socket_root=source.outputs)
+                    source.tool.read_public(source.root / 'runtime.json'), socket_root=source.outputs)
                 selected = source.outputs / 'tribe/application'
                 client = ClientConfig.load(selected / 'client.json', bytearray((selected / 'client.key').read_bytes()))
                 if LocalClient(source.outputs / 'tribe.sock', client).invoke('messaging.send', {})[1].get('error', {}).get('code') != 'invalid_params':
