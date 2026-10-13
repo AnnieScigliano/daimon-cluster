@@ -203,7 +203,8 @@ def routes(handler, app, method, data=b''):
         provider.scope(home, subject, context if path in ('/homemaker/', '/homemaker/miniapp.html') else 'personal')
         if path in ('/homemaker/', '/homemaker/miniapp.html'):
             entry = 'miniapp.html' if path.endswith('miniapp.html') else 'index.html'
-            handler.respond(200, editor_page(provider, entry, context=context), 'text/html; charset=utf-8', style_inline=True);return True
+            handler.respond(200, editor_page(provider, entry, context=context), 'text/html; charset=utf-8',
+                            style_inline=True, telegram_sdk=entry == 'miniapp.html');return True
         if path == '/homemaker/bootstrap.js':
             handler.respond(200, BOOTSTRAP.encode(), 'text/javascript; charset=utf-8');return True
         asset = provider.asset(unquote(path.removeprefix('/homemaker/')))

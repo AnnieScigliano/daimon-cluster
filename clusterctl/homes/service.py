@@ -605,7 +605,7 @@ def handler(app, *, owner=False):
             self._headers_sent = True
             super().end_headers()
 
-        def respond(self, status, body, kind="application/json", cookies=(), headers=(), form_action="'self'", style_inline=False):
+        def respond(self, status, body, kind="application/json", cookies=(), headers=(), form_action="'self'", style_inline=False, telegram_sdk=False):
             if isinstance(body, dict):
                 body = json.dumps(body).encode()
             self.send_response(status)
@@ -624,7 +624,9 @@ def handler(app, *, owner=False):
             )
             self.send_header(
                 "Content-Security-Policy",
-                "default-src 'self'; script-src 'self'; frame-src "
+                "default-src 'self'; script-src 'self'"
+                + (" https://telegram.org/js/telegram-web-app.js" if telegram_sdk else "")
+                + "; frame-src "
                 + frames
                 + "; img-src 'self' "
                 + frames
