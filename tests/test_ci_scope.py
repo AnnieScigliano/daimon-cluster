@@ -6,6 +6,17 @@ from tools.ci_scope import ONBOARDING_CONTRACTS, select
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_scope_uses_only_the_verified_pr_merge_parent(monkeypatch):
+    import subprocess
+    from tools.ci_scope import scope_base
+    old_base, current_base, head, merge = (c * 40 for c in ('a', 'b', 'c', 'd'))
+    monkeypatch.setattr('tools.ci_scope.subprocess.run', lambda *a, **k:
+        subprocess.CompletedProcess(a, 0, f'{merge} {current_base} {head}\n'.encode()))
+    assert scope_base(ROOT, old_base, head) == current_base
+    assert scope_base(ROOT, old_base, 'e' * 40) == old_base
+    assert scope_base(ROOT, old_base, '') == old_base
+
+
 def test_pin_only_qualification_checks_code_content(monkeypatch, tmp_path):
     import subprocess
     from tools.ci_scope import sdk_pin_only, SDK_PIN_TESTS

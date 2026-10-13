@@ -485,20 +485,39 @@ def sdk_pin_only(root: Path, base: str, changed: list[str]) -> bool:
     return all((root / path.split('::', 1)[0]).is_file() for path in SDK_PIN_TESTS)
 
 
+def scope_base(root: Path, base: str, head: str) -> str:
+    """Scope a tested PR merge against its actual first parent.
+
+    GitHub's event base can precede concurrent main merges. Include those in the
+    tested tree, but do not misclassify their already-qualified files as PR edits.
+    Trust the merge parent only when its other parent is the event's exact head.
+    """
+    if not re.fullmatch(r'[0-9a-f]{40}', head):
+        return base
+    result = subprocess.run(['git', 'rev-list', '--parents', '-n', '1', 'HEAD'],
+                             cwd=root, capture_output=True, check=False)
+    parts = result.stdout.decode().split() if result.returncode == 0 else []
+    if len(parts) == 3 and parts[2] == head and re.fullmatch(r'[0-9a-f]{40}', parts[1]):
+        return parts[1]
+    return base
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base', default='')
+    parser.add_argument('--head', default='')
     parser.add_argument('--full', action='store_true')
     args = parser.parse_args(argv)
     root = Path(__file__).resolve().parents[1]
+    base = scope_base(root, args.base, args.head)
     changed = []
-    if not args.full and re.fullmatch(r'[0-9a-f]{40}', args.base):
-        result = subprocess.run(['git', 'diff', '--name-only', '-z', args.base, 'HEAD'],
+    if not args.full and re.fullmatch(r'[0-9a-f]{40}', base):
+        result = subprocess.run(['git', 'diff', '--name-only', '-z', base, 'HEAD'],
                                 cwd=root, capture_output=True, check=False)
         if result.returncode == 0:
             changed = result.stdout.decode().rstrip('\0').split('\0') if result.stdout else []
     profile, tests = select(changed, root)
-    if profile == 'sdk' and sdk_pin_only(root, args.base, changed):
+    if profile == 'sdk' and sdk_pin_only(root, base, changed):
         # Retain prior unchanged authority/custody/receiving qualification.
         tests = list(SDK_PIN_TESTS)
     print(json.dumps({'profile': profile, 'tests': tests, 'changed': changed}))
