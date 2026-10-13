@@ -6,6 +6,17 @@ from tools.ci_scope import ONBOARDING_CONTRACTS, select
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_sdk_bootstrap_keeps_exact_install_and_successor_contracts(tmp_path):
+    from tools.ci_scope import SDK_BOOTSTRAP_FILES, SDK_BOOTSTRAP_TESTS
+    changed = sorted(SDK_BOOTSTRAP_FILES | {'tools/ci_scope.py', 'tests/test_ci_scope.py'})
+    assert select(changed, ROOT) == ('sdk-bootstrap', list(SDK_BOOTSTRAP_TESTS))
+    assert select(changed, tmp_path) == ('full', ['tests'])
+    for other in ('clusterctl/onboarding_custody.py', 'clusterctl/onboarding_runtime.py',
+                  'clusterctl/onboarding_host.py', 'clusterctl/matrix_host.py',
+                  'requirements-weave.txt', 'unknown.py'):
+        assert select([*changed, other], ROOT)[0] != 'sdk-bootstrap'
+
+
 def test_scope_uses_only_the_verified_pr_merge_parent(monkeypatch):
     import subprocess
     from tools.ci_scope import scope_base

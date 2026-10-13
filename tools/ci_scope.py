@@ -210,6 +210,13 @@ SDK_TESTS = tuple(sorted(set(ONBOARDING_CONTRACTS) | {
     'tests/test_onboarding_credential.py'}))
 
 
+SDK_BOOTSTRAP_FILES = {'clusterctl/onboarding_sdk.py', 'tests/test_onboarding_sdk.py',
+                       'docs/runbooks/tribu-sdk-successor.md'}
+SDK_BOOTSTRAP_TESTS = ('tests/test_onboarding_sdk.py', 'tests/test_onboarding_code_successor.py',
+                       'tests/test_onboarding_release.py', 'tests/test_ci_scope.py',
+                       'tests/test_ci_workflow.py')
+
+
 GROUP_FILES = {'tests/test_onboarding_group.py',
     'clusterctl/onboarding_acceptance.py', 'clusterctl/onboarding_target.py',
     'clusterctl/onboarding_host.py',
@@ -287,6 +294,12 @@ def select(changed: list[str], root: Path) -> tuple[str, list[str]]:
         return 'docs', []
     if set(changed) <= CI_FILES | RUNBOOK_DOCS:
         return 'ci', ['tests/test_ci_scope.py', 'tests/test_ci_workflow.py']
+    if ('clusterctl/onboarding_sdk.py' in changed
+            and set(changed) <= SDK_BOOTSTRAP_FILES | CI_FILES
+            and all((root / path).is_file() for path in SDK_BOOTSTRAP_TESTS)):
+        # Offline bootstrap and immutable SDK generations only. Native authority,
+        # admission, dependency pins and host mutations retain their broader scope.
+        return 'sdk-bootstrap', list(SDK_BOOTSTRAP_TESTS)
     observation_tests = ('tests/test_onboarding_target.py', 'tests/test_onboarding_managed.py',
         'tests/test_onboarding_owner_client.py', 'tests/test_onboarding_code_successor.py',
         'tests/test_ci_scope.py', 'tests/test_ci_workflow.py')
