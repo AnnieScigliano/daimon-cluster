@@ -79,6 +79,10 @@ class Passkeys:
             """)
 
     def trusted(self, home, origin):
+        if getattr(self.app, 'sso', None) and home == self.app.sso.context:
+            if origin != self.app.sso.origin:
+                raise ValueError('passkeys_require_login_origin')
+            return
         if origin != self.app.homes[home]["public_url"]:
             raise ValueError("passkeys_require_public_home_origin")
 

@@ -64,6 +64,8 @@ class Sessions:
             CREATE TABLE IF NOT EXISTS owner_credentials(
               digest TEXT PRIMARY KEY, home TEXT NOT NULL, actor TEXT NOT NULL,
               revision TEXT NOT NULL, revoked INTEGER NOT NULL DEFAULT 0);
+            CREATE TABLE IF NOT EXISTS session_parents(
+              child TEXT PRIMARY KEY, parent TEXT NOT NULL);
             """)
 
     def connect(self):
@@ -130,6 +132,15 @@ class Sessions:
                     and not row["revoked"]
                     and row["created"] <= now < row["expires"]
                 )
+                if valid:
+                    parent = db.execute('SELECT parent FROM session_parents WHERE child=?',
+                                        (row['digest'],)).fetchone()
+                    if parent:
+                        source = db.execute('SELECT * FROM sessions WHERE digest=?',
+                                            (parent['parent'],)).fetchone()
+                        valid = bool(source and not source['revoked']
+                                     and source['created'] <= now < source['expires']
+                                     and (source['actor'],source['revision']) == (row['actor'],row['revision']))
                 db.commit()
                 return dict(row) if valid else None
             except BaseException:
@@ -368,6 +379,13 @@ class Sessions:
                         and (parent["actor"], parent["revision"])
                         == (row["actor"], row["revision"])
                     )
+                    if valid:
+                        ancestor=db.execute('SELECT parent FROM session_parents WHERE child=?',
+                                            (parent['digest'],)).fetchone()
+                        if ancestor:
+                            source=db.execute('SELECT * FROM sessions WHERE digest=?',(ancestor['parent'],)).fetchone()
+                            valid=bool(source and not source['revoked'] and source['created']<=now<source['expires']
+                                       and (source['actor'],source['revision'])==(parent['actor'],parent['revision']))
                 db.commit()
                 return dict(row) if valid else None
             except BaseException:

@@ -25,6 +25,10 @@
     status.textContent = "Open this page in your phone’s regular browser to use passkeys. You can still sign in with an approved code.";
   }
   action.addEventListener("click", async () => {
+    if(action.dataset.mode === "sso") {
+      location.assign("/access/sso/start?return="+encodeURIComponent(location.pathname+location.search+location.hash));
+      return;
+    }
     busy(true);
     const mode = action.dataset.mode;
     status.textContent = "Follow your phone’s prompt…";
