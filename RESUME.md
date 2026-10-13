@@ -4,7 +4,7 @@
 
 CompAII, Eko and Oliva now use one signed membership group, demonstrated with
 actual three-body semantic receipts and connected replies. Matrix PR #330 is
-merged; the selected SDK source is `cdafbc0513d43c39f03be6e8b1b0636b9e4e9422`.
+merged; the selected SDK source is `a1a70b6420692d19f85ad0edb945cba00c3f5459`.
 Group selectors replace the former Source/member and temporary repair defaults.
 Admission means invitation and signed acceptance in the existing Tribe, never
 another founder/member Tribe or per-pair proxy enrollment. The maintained worker
@@ -14,6 +14,12 @@ an explicit operator API only, outside worker execution. Current group sends
 freeze all active Root bodies and report unavailable routes honestly. Delivery
 receipts establish authenticated intake, not model reading or automatic reply.
 No model wakeup or native session restart accompanies this deployment.
+
+Matrix #332 also corrected outer-carrier intake: the group no longer signs a
+semantic receipt and then rejects its wrapper as a plain sealed envelope. Real
+three-VPS delivery now has retained recipient-intake ACKs, signed receipts and
+one confirmed Tribu speech (message795). Exact retry retains the same message
+and audience. History and compatible predecessor software remain intact.
 
 Last reconciled: 2026-10-07.
 

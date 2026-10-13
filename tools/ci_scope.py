@@ -183,7 +183,7 @@ INPUT_CACHE_TESTS = ('tests/test_onboarding_input.py', 'tests/test_onboarding_ho
     'tests/test_onboarding_worker_install.py', 'tests/test_onboarding_intake.py',
     'tests/test_onboarding.py', 'tests/test_ci_scope.py', 'tests/test_ci_workflow.py')
 
-SDK_FILES = {'requirements-weave.txt', 'clusterctl/onboarding_sdk.py',
+SDK_FILES = {'requirements-weave.txt', 'RESUME.md', 'clusterctl/onboarding_sdk.py',
     'clusterctl/matrix_host.py', 'clusterctl/onboarding_peer.py',
     'clusterctl/onboarding_peer_native.py', 'clusterctl/onboarding_owner_client.py',
     'support/matrix-onboarding/PROVENANCE.json',
@@ -448,19 +448,81 @@ def select(changed: list[str], root: Path) -> tuple[str, list[str]]:
     return 'full', ['tests']
 
 
+SDK_PIN_TESTS = ('tests/test_onboarding_sdk.py', 'tests/test_matrix_host.py',
+    'tests/test_matrix_status.py', 'tests/test_onboarding_group.py',
+    'tests/test_clusterd.py::test_ontology_read_routes',
+    'tests/test_onboarding_peer.py::test_tool_capture_requires_the_exact_upstream_bytes',
+    'tests/test_ci_scope.py', 'tests/test_ci_workflow.py')
+
+
+def sdk_pin_only(root: Path, base: str, changed: list[str]) -> bool:
+    """Narrow repeated qualification only when executable changes are pin literals.
+
+    File names alone cannot prove this. Any altered function, import, schema or
+    dependency other than the exact Matrix commit retains the full SDK profile.
+    """
+    pins = {'requirements-weave.txt', 'clusterctl/onboarding_sdk.py',
+            'clusterctl/matrix_host.py'}
+    allowed = pins | CI_FILES | {'RESUME.md', 'support/matrix-onboarding/PROVENANCE.json',
+                                 'tests/test_clusterd.py'}
+    if not pins <= set(changed) or not set(changed) <= allowed:
+        return False
+    for name in sorted(pins):
+        before = subprocess.run(['git', 'show', base + ':' + name], cwd=root,
+                                 capture_output=True, check=False)
+        if before.returncode:
+            return False
+        try:
+            original, current = before.stdout.decode(), (root / name).read_text()
+        except (OSError, UnicodeError):
+            return False
+        if name == 'requirements-weave.txt':
+            pattern = r'(?m)(^daimon-matrix @ git\+https://github\.com/AlterMundi/daimon-matrix\.git@)[0-9a-f]{40}$'
+        else:
+            variable = 'MATRIX_COMMIT' if name.endswith('onboarding_sdk.py') else 'MATRIX_CONTRACT_COMMIT'
+            pattern = r'(?m)(^' + variable + r' = )[\"\x27][0-9a-f]{40}[\"\x27]$'
+        old, old_count = re.subn(pattern, r'\1<PIN>', original)
+        new, new_count = re.subn(pattern, r'\1<PIN>', current)
+        if old_count != 1 or new_count != 1 or old != new:
+            return False
+    return all((root / path.split('::', 1)[0]).is_file() for path in SDK_PIN_TESTS)
+
+
+def scope_base(root: Path, base: str, head: str) -> str:
+    """Scope a tested PR merge against its actual first parent.
+
+    GitHub's event base can precede concurrent main merges. Include those in the
+    tested tree, but do not misclassify their already-qualified files as PR edits.
+    Trust the merge parent only when its other parent is the event's exact head.
+    """
+    if not re.fullmatch(r'[0-9a-f]{40}', head):
+        return base
+    result = subprocess.run(['git', 'rev-list', '--parents', '-n', '1', 'HEAD'],
+                             cwd=root, capture_output=True, check=False)
+    parts = result.stdout.decode().split() if result.returncode == 0 else []
+    if len(parts) == 3 and parts[2] == head and re.fullmatch(r'[0-9a-f]{40}', parts[1]):
+        return parts[1]
+    return base
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base', default='')
+    parser.add_argument('--head', default='')
     parser.add_argument('--full', action='store_true')
     args = parser.parse_args(argv)
     root = Path(__file__).resolve().parents[1]
+    base = scope_base(root, args.base, args.head)
     changed = []
-    if not args.full and re.fullmatch(r'[0-9a-f]{40}', args.base):
-        result = subprocess.run(['git', 'diff', '--name-only', '-z', args.base, 'HEAD'],
+    if not args.full and re.fullmatch(r'[0-9a-f]{40}', base):
+        result = subprocess.run(['git', 'diff', '--name-only', '-z', base, 'HEAD'],
                                 cwd=root, capture_output=True, check=False)
         if result.returncode == 0:
             changed = result.stdout.decode().rstrip('\0').split('\0') if result.stdout else []
     profile, tests = select(changed, root)
+    if profile == 'sdk' and sdk_pin_only(root, base, changed):
+        # Retain prior unchanged authority/custody/receiving qualification.
+        tests = list(SDK_PIN_TESTS)
     print(json.dumps({'profile': profile, 'tests': tests, 'changed': changed}))
     output = os.environ.get('GITHUB_OUTPUT')
     if output:
