@@ -95,6 +95,38 @@ def accept(target, packet: dict, *, expected_being: str) -> dict:
         return json.loads(onboarding_release.regular(response, uid=os.geteuid()))
 
 
+def _authority_selections(target, tool, identity, known):
+    """Verify the bounded owner-signed selection chain from the original peer."""
+    from daimon_matrix.operator_messaging import known_peer_successor
+    path = root(target) / 'authority-successor.json'
+    packets = []
+    seen = set()
+    while path.exists():
+        packet = json.loads(onboarding_release.regular(path, uid=os.geteuid()))
+        tool.verify_document(identity, packet['document'], packet['binding'])
+        packet_hash = digest(packet)
+        if packet_hash in seen or len(packets) >= 256:
+            raise OnboardingError('onboarding_peer_successor_conflict')
+        seen.add(packet_hash)
+        packets.append(packet)
+        previous = packet['document'].get('previous_selection_sha256')
+        if previous is None:
+            break
+        import re
+        if not isinstance(previous, str) or re.fullmatch('[0-9a-f]{64}', previous) is None:
+            raise OnboardingError('onboarding_peer_successor_conflict')
+        path = root(target) / ('authority-successor-' + previous + '.json')
+        if not path.exists() or digest(json.loads(onboarding_release.regular(path, uid=os.geteuid()))) != previous:
+            raise OnboardingError('onboarding_peer_successor_conflict')
+    prior = copy.deepcopy(known)
+    authority = None
+    for packet in reversed(packets):
+        prior = copy.deepcopy(known)
+        document = packet['document']
+        known, authority = known_peer_successor(known, document['authority'], document['authority_history'])
+    return known, prior, authority, packets[0] if packets else None
+
+
 def augmented(target, original: dict, bundle: dict) -> tuple[dict, bool]:
     """Verify only the exact native additive peer change, not a new identity.
 
@@ -126,6 +158,14 @@ def augmented(target, original: dict, bundle: dict) -> tuple[dict, bool]:
     if expected['sources'] is None:
         expected['sources'] = dict(cas_filename='sources.sqlite3', known_beings=[])
     peers = expected['sources']['known_beings']
+    successor_path = root(target) / 'authority-successor.json'
+    successor_authority = None
+    prior_known = copy.deepcopy(known)
+    pending = False
+    if successor_path.exists():
+        known, prior_known, successor_authority, selected = _authority_selections(
+            target, tool, identities[1], known)
+        succession = selected['document']
     matching = [row for row in peers if row['manifest']['being_ref'] == authorities[0].state.being_ref]
     if matching and matching != [known]:
         raise OnboardingError('existing_onboarding_target_preserved')
@@ -138,7 +178,12 @@ def augmented(target, original: dict, bundle: dict) -> tuple[dict, bool]:
         refs.append(authorities[0].state.being_ref)
         refs.sort()
     if bundle != expected:
-        raise OnboardingError('existing_onboarding_target_preserved')
+        prior = copy.deepcopy(expected)
+        prior['sources']['known_beings'] = [prior_known if row['manifest']['being_ref'] == authorities[0].state.being_ref else row
+            for row in prior['sources']['known_beings']]
+        if successor_authority is None or bundle != prior:
+            raise OnboardingError('existing_onboarding_target_preserved')
+        pending = True
     from daimon_matrix.weave import verify_event
     from daimon_matrix.relationship_store import RelationshipView
     from daimon_matrix.runtime import verify_relationship_card_authority
@@ -172,16 +217,33 @@ def augmented(target, original: dict, bundle: dict) -> tuple[dict, bool]:
                 or ready['runtime_root'] != str(target.package / 'runtime')
                 or ready['visibility_installation'] != str(visibility)):
             raise OnboardingError('native_onboarding_peer_plan_conflict')
-        app = json.loads(onboarding_release.regular(application / 'application.json', uid=os.geteuid()))
-        binding = json.loads(onboarding_release.regular(application / 'binding.json', uid=os.geteuid()))
-        tool.verify_document(identities[1], app, binding)
+        from daimon_matrix.messaging_config import _read_publication, verify_visibility_participant
+        try:
+            app, metadata = _read_publication(application,
+                lambda value, binding: tool.verify_document(identities[1], value, binding))
+        except ValueError:
+            raise OnboardingError('native_onboarding_peer_plan_conflict') from None
+        approved_authorities = [value['document']['authority'] for value in identities]
+        if successor_authority is not None:
+            approved_authorities[0] = succession['authority']
         if digest(app) != ready['application_sha256']:
-            raise OnboardingError('native_onboarding_peer_plan_conflict')
+            publication = json.loads(onboarding_release.regular(application / 'publication.json', uid=os.geteuid()))
+            if successor_authority is None or publication['body']['predecessor_sha256'] != ready['application_sha256']:
+                raise OnboardingError('native_onboarding_peer_plan_conflict')
+            pending = True
+        if app['authorities'] != approved_authorities:
+            prior_authorities = [dict(schema='dm.operator.authority/v1', **{
+                key: value for key, value in prior_known.items()
+                if key not in {'authority_history', 'ledger_filename'}}), identities[1]['document']['authority']]
+            if successor_authority is None or app['authorities'] != prior_authorities:
+                raise OnboardingError('native_onboarding_peer_plan_conflict')
+            approved_authorities = app['authorities']
+            pending = True
         from urllib.parse import urlsplit
         endpoint = urlsplit(plan['endpoints'][1])
         rules = tool.policies(plan)
         if (app['listen'] != dict(host=endpoint.hostname, port=endpoint.port)
-                or app['authorities'] != [value['document']['authority'] for value in identities]
+                or app['authorities'] != approved_authorities
                 or app['relationship_events'] != signed
                 or app['relationship_mode'] != dict(mode='shared', runtime_id=original['runtime_id'],
                     state_root=str(target.package / 'runtime'), store_filename=store.name)):
@@ -219,7 +281,11 @@ def augmented(target, original: dict, bundle: dict) -> tuple[dict, bool]:
         expected_disclosure['issued_at_ms'] = current['issued_at_ms']
         acceptance = document['acceptance_set']
         bindings = acceptance['bindings']
-        if (document['runtime_id'] != original['runtime_id'] or document['application_sha256'] != digest(app)
+        if document['application_sha256'] != digest(app):
+            if successor_authority is None or document['application_sha256'] != ready['application_sha256']:
+                raise OnboardingError('native_onboarding_peer_plan_conflict')
+            pending = True
+        if (document['runtime_id'] != original['runtime_id']
                 or current != expected_disclosure
                 or current['destination']['representation'] not in REPRESENTATIONS
                 or type(current['issued_at_ms']) is not int
@@ -234,7 +300,8 @@ def augmented(target, original: dict, bundle: dict) -> tuple[dict, bool]:
         for being, binding in zip(sorted(beings), bindings, strict=True):
             if binding['body']['being_ref'] != being:
                 raise OnboardingError('native_onboarding_peer_plan_conflict')
-            tool.verify_document(identities[beings.index(being)], current, binding)
+            authority = successor_authority if being == beings[0] and successor_authority is not None else authorities[beings.index(being)]
+            verify_visibility_participant(authority, being, current, binding, at_ms=tool.now())
         for actor in (0, 1):
             tool.verify_document(identities[actor], disclosure, payload['visibility_bindings'][actor][1])
         secrets = document['secrets']
@@ -250,4 +317,78 @@ def augmented(target, original: dict, bundle: dict) -> tuple[dict, bool]:
         origin=bundle['local_origin'], runtime_sha256=digest(bundle),
         credential_runtime_sha256=digest(original), link_id=plan['link_id'],
         peer_being_ref=authorities[0].state.being_ref)
-    return receipt, complete
+    return receipt, complete and not pending
+
+
+def adopt_authority(target, authority: dict, history: list, *, native_visibility: Path | None = None) -> dict:
+    """Resume an existing signed link's successor, with no second ceremony."""
+    from daimon_matrix.canonical import canonical_bytes
+    from daimon_matrix.messaging_config import create_binding, config_digest, read_document
+    from daimon_matrix.operator_messaging import (
+        _reissue_installation, adopt_peer_authority, known_peer_successor, republish,
+    )
+    from daimon_matrix.keystore import _atomic_write
+
+    tool = native(target.code, uid=target.code_uid)
+    directory = private_directory(root(target))
+    selected = directory / 'authority-successor.json'
+    proposal = dict(authority=authority, authority_history=history)
+    with target._runtime_writer():
+        # Original receiving/custody checks remain in Target.observe, including
+        # partial successor states that the same observer now reports unready.
+        if target.observe()['phase'] not in {'v8', 'peer-published'}:
+            raise OnboardingError('current_onboarding_target_required')
+        runtime = loaded(target)
+        being = authority['manifest']['being_ref']
+        rows = target.document_bundle()['sources']['known_beings']
+        previous = [row for row in rows if row['manifest']['being_ref'] == being]
+        if len(previous) != 1:
+            raise OnboardingError('approved_onboarding_peer_required')
+        try:
+            known_peer_successor(previous[0], authority, history)
+        except Exception:
+            raise OnboardingError('onboarding_peer_successor_conflict') from None
+        if selected.exists():
+            packet = read_document(selected)
+            payload = packet['document']
+            if {key: payload[key] for key in ('authority', 'authority_history')} != proposal:
+                # A next selection may replace only a fully accepted generation.
+                if target.observe()['phase'] != 'v8':
+                    raise OnboardingError('onboarding_peer_successor_conflict')
+                accepted = tool.authority_from_document(payload['authority'])
+                if previous[0]['manifest'] != accepted.manifest.value:
+                    raise OnboardingError('onboarding_peer_successor_conflict')
+                packet_hash = config_digest(packet)
+                archive = directory / ('authority-successor-' + packet_hash + '.json')
+                if archive.exists() and read_document(archive) != packet:
+                    raise OnboardingError('onboarding_peer_successor_conflict')
+                _atomic_write(archive, canonical_bytes(packet))
+                proposal['previous_selection_sha256'] = packet_hash
+                _atomic_write(selected, canonical_bytes(dict(document=proposal,
+                    binding=create_binding(runtime, proposal))))
+        else:
+            _atomic_write(selected, canonical_bytes(dict(document=proposal,
+                binding=create_binding(runtime, proposal))))
+        adopt_peer_authority(runtime, authority, history)
+        current = loaded(target)
+        if native_visibility is not None:
+            _reissue_installation(current, native_visibility,
+                application_sha256=config_digest(target.document_bundle()))
+        result = republish(current, directory / 'application',
+            installation=directory / 'visibility/installation.json', peer_being_refs=[being])
+        ready_path = directory / 'ready.json'
+        ready = read_document(ready_path)
+        ready['application_sha256'] = result['application_sha256']
+        _atomic_write(ready_path, canonical_bytes(ready))
+        observed = target.observe()
+        if observed['phase'] != 'v8':
+            raise OnboardingError('native_onboarding_peer_incomplete')
+        receipt = dict(schema='cluster-onboarding-peer-authority-adoption/v1',
+            plan_digest=digest(target.plan), peer_being_ref=being,
+            manifest_hash=config_digest(authority['manifest']),
+            manifest_revision=authority['manifest']['revision'],
+            runtime_sha256=config_digest(target.document_bundle()),
+            application_sha256=result['application_sha256'], status='current')
+        _atomic_write(directory / 'authority-adoption.json', canonical_bytes(dict(
+            document=receipt, binding=create_binding(current, receipt))))
+        return receipt
