@@ -18,6 +18,12 @@ from tools.export_local_matrix_identity import export
 pytest_plugins = ['tests.test_onboarding_peer']
 
 
+def test_public_identity_export_pin_matches_the_distributed_native_asset():
+    from tools.export_local_matrix_identity import PEER_SHA256
+    asset = Path(__file__).resolve().parents[1] / 'clusterctl/onboarding_peer_native.py'
+    assert hashlib.sha256(asset.read_bytes()).hexdigest() == PEER_SHA256
+
+
 def request(name='eko', owner='sai', expected=None):
     return dict(schema=local.SCHEMA, name=name, owner=owner, request_id=str(uuid.uuid4()),
         expected_being_ref=expected, updated_ms=int(time.time() * 1000))

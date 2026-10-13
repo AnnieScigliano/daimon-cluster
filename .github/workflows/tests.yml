@@ -270,6 +270,9 @@ jobs:
             /bin/bash -ceu \
               'test "$(readlink /proc/self/ns/net)" != "$HOST_NET_NAMESPACE"; test "$(wc -l < /proc/net/route)" -eq 1; test ! -e /home/runner; test ! -e /run/docker.sock; mkdir -m 700 "$HOME" "$TMPDIR"; test "$("/python/bin/$PRIVATE_PYTHON" -I -c "import sys; print(sys.base_prefix)")" = /python; "/python/bin/$PRIVATE_PYTHON" -m venv --copies /work/venv; test "$(/work/venv/bin/python -I -c "import sys; print(sys.base_prefix)")" = /python'
       - run: python -m pip install -c constraints.txt -r requirements-dev.txt
+      - name: Install optional home passkey adapter
+        if: needs.scope.outputs.profile == 'homes' || needs.scope.outputs.profile == 'full'
+        run: python -m pip install -c constraints.txt -r requirements-homes.txt
       - name: Verify exact Matrix source pin
         run: |
           python - <<'PY'

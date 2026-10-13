@@ -346,3 +346,33 @@ def test_membership_group_successor_keeps_receiving_contracts_without_physical_j
     assert select(changed, tmp_path) == ('full', ['tests'])
     for boundary in ('clusterctl/production_fences.py', 'constraints.txt', 'unknown.py'):
         assert select(changed + [boundary], ROOT) == ('full', ['tests'])
+
+
+def test_homes_keep_read_auth_contracts_and_shared_changes_keep_full(tmp_path):
+    from tools.ci_scope import HOME_FILES, HOME_TESTS
+    assert select(sorted(HOME_FILES),ROOT)==('homes',list(HOME_TESTS))
+    assert select(sorted(HOME_FILES)+['requirements-weave.txt'],ROOT)==('full',['tests'])
+    assert select(sorted(HOME_FILES)+['clusterd/auth.py'],ROOT)==('full',['tests'])
+    assert select(sorted(HOME_FILES)+['clusterctl/homes/unknown.py'],ROOT)==('full',['tests'])
+    assert select(sorted(HOME_FILES),tmp_path)==('full',['tests'])
+
+
+def test_home_worker_composition_keeps_qualification_and_mount_boundaries(tmp_path):
+    from tools.ci_scope import HOME_WORKER_FILES, HOME_WORKER_TESTS
+    changed = sorted(HOME_WORKER_FILES | {'tools/ci_scope.py', 'tests/test_ci_scope.py'})
+    assert select(changed, ROOT) == ('homes', list(HOME_WORKER_TESTS))
+    assert select(changed, tmp_path) == ('full', ['tests'])
+    for name in ('clusterctl/onboarding_sdk.py', 'clusterctl/onboarding_telegram.py',
+                 'requirements-weave.txt', 'clusterctl/onboarding_target.py'):
+        assert select(changed + [name], ROOT) == ('full', ['tests'])
+
+
+def test_native_observation_keeps_actual_signed_presence_and_owner_contracts(tmp_path):
+    changed = ['clusterctl/onboarding_target.py', 'tests/test_onboarding_owner_client.py',
+               'tools/ci_scope.py', 'tests/test_ci_scope.py']
+    profile, tests = select(changed, ROOT)
+    assert profile == 'portal'
+    assert {'tests/test_onboarding_target.py', 'tests/test_onboarding_managed.py',
+            'tests/test_onboarding_owner_client.py', 'tests/test_onboarding_code_successor.py'} <= set(tests)
+    assert select(changed, tmp_path) == ('full', ['tests'])
+    assert select(changed + ['clusterctl/onboarding_sdk.py'], ROOT)[0] != 'portal'

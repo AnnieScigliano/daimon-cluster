@@ -783,7 +783,13 @@ class HostBackend:
         for name, expected in mounts.items():
             if name in devices and devices[name] != expected:
                 raise OnboardingError("foreign_receiving_mount_preserved")
-        return all(name in devices for name in mounts)
+        # Operational aliases may change while the exact qualified source,
+        # destination and read-only fence remain the same. A conflicting
+        # canonical device above is still preserved, never bypassed.
+        return all(
+            name in devices or any(actual == expected for actual in devices.values())
+            for name, expected in mounts.items()
+        )
 
     def _guest_command(self, plan: dict, action: str, stage: str, guest_code: Path) -> str:
         # Only qualified receiving code runs. No command from the seed or
