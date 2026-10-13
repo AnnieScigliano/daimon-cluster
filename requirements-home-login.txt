@@ -1,0 +1,4 @@
+# Optional Google OIDC adapter, alongside requirements-homes.txt.
+# No native harness or body environment is changed by enabling home login.
+google-auth[requests]==2.62.0
+requests==2.34.2

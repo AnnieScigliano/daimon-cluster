@@ -79,6 +79,10 @@ class Passkeys:
             """)
 
     def trusted(self, home, origin):
+        if getattr(self.app, 'sso', None) and home == self.app.sso.context:
+            if origin != self.app.sso.origin:
+                raise ValueError('passkeys_require_login_origin')
+            return
         if origin != self.app.homes[home]["public_url"]:
             raise ValueError("passkeys_require_public_home_origin")
 
@@ -96,8 +100,7 @@ class Passkeys:
             or not row
             or row["home"] != home
             or row["origin"] != origin
-            or row["revoked"]
-            or not row["created"] <= now < row["expires"]
+            or not self.sessions.active(db, row, now, max_age=900)
             or now - row["created"] > 900
         ):
             raise ValueError("fresh_browser_sign_in_required")

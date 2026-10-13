@@ -20,11 +20,15 @@
         ? "We couldn’t sign in with that passkey. Try again or use an approved code."
         : "We couldn’t verify that access key. To add or revoke keys, sign in again with a passkey or a new approved code, then retry. Your existing access is unchanged.";
   }
-  if (!client.supported()) {
+  if (!client.supported() && action.dataset.mode !== "sso") {
     action.disabled = true;
     status.textContent = "Open this page in your phone’s regular browser to use passkeys. You can still sign in with an approved code.";
   }
   action.addEventListener("click", async () => {
+    if(action.dataset.mode === "sso") {
+      location.assign("/access/sso/start?return="+encodeURIComponent(location.pathname+location.search+location.hash));
+      return;
+    }
     busy(true);
     const mode = action.dataset.mode;
     status.textContent = "Follow your phone’s prompt…";
