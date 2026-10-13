@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+import time
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
@@ -16,6 +17,15 @@ from clusterctl.homes.styles import StyleConsumer
 from tests.test_home_passkeys import approved
 from tools.qualify_home_login_browser import gateway
 from playwright.sync_api import sync_playwright
+
+
+def wait(page, expression, arg=None):
+    """DevTools evaluation avoids a string-eval waiter under the real CSP."""
+    deadline=time.monotonic()+10
+    while time.monotonic()<deadline:
+        if page.evaluate(expression, arg):return
+        page.wait_for_timeout(100)
+    raise AssertionError("browser_condition_timed_out: "+expression)
 
 
 def main():
@@ -56,12 +66,12 @@ def main():
             mini.on('console',lambda message:errors.append(message.text) if message.type=='error' else None)
             response=mini.goto(origin+'/homemaker/miniapp.html#tgWebAppPlatform=android&tgWebAppVersion=9.1')
             assert 'https://telegram.org/js/telegram-web-app.js' in response.headers['content-security-policy']
-            mini.wait_for_function('window.Telegram?.WebApp?.platform === "android" && window.nativeEvents.some(e=>e.name==="web_app_ready")')
+            wait(mini, '()=>window.Telegram?.WebApp?.platform === "android" && window.nativeEvents.some(e=>e.name==="web_app_ready")')
             mini.evaluate('Telegram.WebView.receiveEvent("safe_area_changed",{top:12,bottom:16,left:0,right:0})')
-            mini.wait_for_function('document.documentElement.style.getPropertyValue("--telegram-safe-top") === "12px"')
-            mini.wait_for_function('getComputedStyle(document.documentElement).getPropertyValue("--dm-background").trim() !== ""')
+            wait(mini, '()=>document.documentElement.style.getPropertyValue("--telegram-safe-top") === "12px"')
+            wait(mini, '()=>getComputedStyle(document.documentElement).getPropertyValue("--dm-background").trim() !== ""')
             assert mini.evaluate('getComputedStyle(document.body).backgroundColor')==home.evaluate('getComputedStyle(document.body).backgroundColor')
-            mini.wait_for_function('(background)=>window.nativeEvents.some(e=>e.name==="web_app_set_header_color" && JSON.parse(e.data).color===background)',
+            wait(mini, '(background)=>window.nativeEvents.some(e=>e.name==="web_app_set_header_color" && JSON.parse(e.data).color?.toLowerCase()===background.toLowerCase())',
                                    arg=initial['appearance']['background'])
             assert mini.locator('[data-compact-nav]').is_visible()
             assert mini.evaluate('document.documentElement.scrollWidth <= innerWidth')
@@ -77,7 +87,7 @@ def main():
             home.wait_for_function('(old)=>getComputedStyle(document.documentElement).getPropertyValue("--dm-background").trim() !== old',
                                    arg=initial['appearance']['background'])
             mini.evaluate('window.dispatchEvent(new CustomEvent("home-style:refresh"))')
-            mini.wait_for_function('(old)=>getComputedStyle(document.documentElement).getPropertyValue("--dm-background").trim() === old',
+            wait(mini, '(old)=>getComputedStyle(document.documentElement).getPropertyValue("--dm-background").trim() === old',
                                    arg=initial['appearance']['background'])
             changed=home.evaluate('fetch("/style.json?surface=home").then(r=>r.json())')
             assert initial['design_ref']!=changed['design_ref']
