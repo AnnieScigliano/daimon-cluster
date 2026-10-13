@@ -16,7 +16,7 @@ test('actual parent sends validated appearance; siblings/null origin/unsafe CSS 
 });
 test('explicitly authored work never subscribes to default appearance',()=>{assert.equal(fixture('explicit').listeners.message,undefined);});
 test('source-owned policies preserve authored work without disabling inheritance elsewhere',()=>{
- for(const policy of ['authored','unsupported'])assert.equal(fixture('default',policy).listeners.message,undefined);
+ for(const policy of ['authored','unsupported',''])assert.equal(fixture('default',policy).listeners.message,undefined);
  assert.equal(typeof fixture('explicit','inherit').listeners.message,'function');
 });
 test('an authored editor broadcasts explicit saves without fetching or applying its own default',()=>{

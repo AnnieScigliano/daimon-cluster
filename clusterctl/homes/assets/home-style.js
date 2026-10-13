@@ -2,7 +2,7 @@
 "use strict";
 (() => {
   const policy=document.documentElement.dataset?.stylePolicy;
-  const authored=policy?policy!=='inherit':document.documentElement.dataset?.styleSelection==='explicit';
+  const authored=policy!==undefined?policy!=='inherit':document.documentElement.dataset?.styleSelection==='explicit';
   const channel=typeof BroadcastChannel==='function'?new BroadcastChannel('dm.home-style/v1'):null;
   if(authored){
     // An editor can notify other consumers while retaining its own interface.
