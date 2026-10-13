@@ -1,8 +1,9 @@
 {
   "commit": "63968130294c4db6eac51a94800a837f2c10bad5",
-  "installed_sdk_commit": "4c64beac8fce816c2bd15abbcff005e842ff7a0c",
+  "installed_sdk_commit": "a1a70b6420692d19f85ad0edb945cba00c3f5459",
   "path": "tools/chat_link.py",
-  "purpose": "Exact maintained native peer ceremony; captured unchanged, never a fork.",
+  "purpose": "Explicitly directed legacy peer ceremony. Upstream origin is retained; the qualified receiving copy includes maintained runtime compatibility extensions. It is not the Tribe group onboarding default.",
   "repository": "https://github.com/AlterMundi/daimon-matrix",
-  "sha256": "35368bbadac08b45a804d58078ab9ce69f6cdcf5538bd41b1fa85de8fca39e54"
+  "sha256": "d1f67e40bbc8c08eff0e0f96354e107d2f8219b258c661b81b9e98a60565c03c",
+  "upstream_sha256": "35368bbadac08b45a804d58078ab9ce69f6cdcf5538bd41b1fa85de8fca39e54"
 }
