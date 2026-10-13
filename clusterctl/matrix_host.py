@@ -30,7 +30,7 @@ from typing import Any
 from .embodiments import Registry, RegistryError
 from .fences import FenceError, ResourceFenceStore
 
-MATRIX_CONTRACT_COMMIT = "2c443fdd39ca91529771ec7db369a55a1f2dea18"
+MATRIX_CONTRACT_COMMIT = "70a1fc273022675c47acdd1773b6bd07be4b9f23"
 MATRIX_ROOT_SCHEMA = "dm.cluster-matrix-root/v1"
 MATRIX_SNAPSHOT_SCHEMA = "dm.cluster-matrix-snapshot/v1"
 MATRIX_RECOVERY_SNAPSHOT_SCHEMA = "dm.cluster-matrix-recovery-snapshot/v1"
