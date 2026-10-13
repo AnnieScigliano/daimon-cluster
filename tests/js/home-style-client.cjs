@@ -1,9 +1,9 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),test=require('node:test');
 const appearance={background:'#080b14',surface:'#080b14',text:'#eeeaf6',accent:'#ffcc99',bodyFont:'monospace',headingFont:'monospace',radius:'12px',gap:'24px',scheme:'dark'};
-function fixture(selection='default') {
+function fixture(selection='default',policy) {
  const listeners={},values={},style={setProperty:(k,v)=>values[k]=v,removeProperty:k=>delete values[k]};
  const parent={},window={parent,addEventListener:(event,fn)=>listeners[event]=fn};
- const ctx={window,parent,document:{documentElement:{dataset:{styleSelection:selection},style},body:{style}}};
+ const ctx={window,parent,document:{documentElement:{dataset:{styleSelection:selection,stylePolicy:policy},style},body:{style}}};
  vm.createContext(ctx);vm.runInContext(fs.readFileSync('clusterctl/homes/assets/artifact-style.js','utf8'),ctx);
  return {listeners,values,parent};
 }
@@ -15,6 +15,21 @@ test('actual parent sends validated appearance; siblings/null origin/unsafe CSS 
  f.listeners.message({source:f.parent,origin:'https://home.example',data:{...data,appearance:null}});assert.deepEqual(f.values,{});
 });
 test('explicitly authored work never subscribes to default appearance',()=>{assert.equal(fixture('explicit').listeners.message,undefined);});
+test('source-owned policies preserve authored work without disabling inheritance elsewhere',()=>{
+ for(const policy of ['authored','unsupported'])assert.equal(fixture('default',policy).listeners.message,undefined);
+ assert.equal(typeof fixture('explicit','inherit').listeners.message,'function');
+});
+test('an authored editor broadcasts explicit saves without fetching or applying its own default',()=>{
+ const events={},messages=[];
+ const context={document:{documentElement:{dataset:{stylePolicy:'authored'}}},
+  window:{addEventListener:(key,fn)=>events[key]=fn},
+  BroadcastChannel:class{postMessage(value){messages.push(value);}},
+  fetch:()=>{throw Error('authored editor fetched its default');},
+  setTimeout:()=>{throw Error('authored editor installed a refresh timer');}};
+ vm.createContext(context);vm.runInContext(fs.readFileSync('clusterctl/homes/assets/home-style.js','utf8'),context);
+ events['home-style:refresh']();assert.deepEqual(messages,['changed']);
+ assert.equal(events.pageshow,undefined);
+});
 test('a stalled refresh times out and resumes; a hidden/closed page cannot apply a stale response',async()=>{
  const events={},timers=[],fetches=[],styleValues={};
  const document={visibilityState:'visible',documentElement:{style:{setProperty:(k,v)=>styleValues[k]=v,removeProperty:k=>delete styleValues[k]}},body:{style:{}},querySelectorAll:()=>[],addEventListener:(key,fn)=>events[key]=fn};

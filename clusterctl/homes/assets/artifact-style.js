@@ -1,7 +1,9 @@
 /* Optional consumer for sandboxed work. Receives appearance, never credentials. */
 "use strict";
 (() => {
-  if(window.parent===window || document.documentElement.dataset.styleSelection==='explicit')return;
+  const policy=document.documentElement.dataset.stylePolicy;
+  const authored=policy?policy!=='inherit':document.documentElement.dataset.styleSelection==='explicit';
+  if(window.parent===window || authored)return;
   const names={background:['--space','--home-background'],surface:['--panel','--panel2','--home-surface'],text:['--ink','--muted','--home-text'],accent:['--cyan','--amber','--mauve','--line','--home-accent'],bodyFont:['--home-font'],headingFont:['--home-heading-font'],radius:['--home-radius'],gap:['--home-gap']};
   window.addEventListener('message',event=>{
     if(event.source!==parent || !/^https:\/\/[^/]+$/.test(event.origin) || event.data?.type!=='home-artifact:style' || event.data.contract!=='homemaker.appearance/v1') return;
