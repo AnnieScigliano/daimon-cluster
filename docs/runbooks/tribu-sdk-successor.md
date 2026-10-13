@@ -31,6 +31,15 @@ These checks prove installed artifact/dependency integrity, not an observed load
 receiver. The compatible-reader probe, selected authority/application and actual
 receiving readiness remain distinct stages under Matrix #337 / Cluster #232.
 
+Receiving update preparation uses `onboarding_code_successor.plan_update` and the
+existing `OperationJournal`. It binds the approved manifest digest and complete
+pre/post-vector hashes in immutable intent, then checks returned retained vectors.
+An exact completed retry returns its original row; altered vectors, conflicting
+pending updates and degraded/compensated attempts cannot reopen effects. Apply
+and resume must use those retained vectors under actual selection/writer locks.
+Preparation itself does not select code, accept authority, load a receiver or
+enable egress; actual adapters and readiness/communication remain #232 work.
+
 Retain the actual currently selected Telegram artifact. Where Telegram already
 has its own qualified successor, keep that independent selection. If building a
 combined V3 successor, pass its current qualified artifact explicitly: building
