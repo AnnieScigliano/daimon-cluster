@@ -29,9 +29,9 @@ stores follows from this SDK upgrade.
 
 Source keeps the exact installed VCS-commit guard; receiving bodies keep the
 hash-locked wheelhouse and installation receipt. Both use the same declared
-Matrix commit. The native peer helper and owner-client installer remain exact,
-unchanged captures of their maintained upstream source, with separate hashes
-and provenance. The installer's existing `--refresh-guidance-plan` changes
+Matrix commit. The native peer helper preserves upstream provenance and qualified receiving
+extensions, with its exact maintained hash; the owner-client installer retains
+its own independent artifact provenance. The installer's existing `--refresh-guidance-plan` changes
 planned instruction bytes without replacing the connection's command, channels,
 capability or request history.
 
@@ -145,3 +145,36 @@ a plain wheel environment is qualified for receiving use only when paired with
 the supported hash-locked wheelhouse and installation receipt. Keep both guards
 and the original receiving SDK. Native stores and proof keys remain intact;
 diagnostic sidecars carry observations without granting transmission authority.
+
+
+## Membership group default — 2026-10-13
+
+Matrix #151/#198 and merged #330 own the conversation contract. Current qualified
+SDK source: `cdafbc0513d43c39f03be6e8b1b0636b9e4e9422`. CompAII, Eko and Oliva
+share one signed group, with authenticated receipts for the three VPS bodies.
+One message freezes all active Root bodies, including unavailable siblings; one
+Tribu publication represents that message. A transport ACK is not delivery.
+
+The receiving signed selection names the group application, visibility and native
+socket. Both incoming/outgoing channels are `tribe`. Owner clients derive this
+selection, not old `peer-in`/`peer-out` IDs. Archive obsolete bindings and proxies;
+never alias old directed send IDs into group requests. The worker recognizes this
+signed selection before examining the historical pair installer. An absent group
+is an explicit enrollment gap, never permission to reconstruct Source/member
+pairs. Further portal admission must invite/accept in the existing Tribe and
+qualify its shared Root inventory/roster transaction. It is not yet an automatic
+future-member admission claim.
+
+Preserve each original receiving release as the immutable successor base, and
+record the actual selected runtime per body in the host worker configuration.
+Otherwise later reconciliation can reselect stale SDK/code. Worker code uses a
+matching genuine VCS SDK installation; receiving bodies use the corresponding
+hash-locked wheelhouse. Update these selections together, retaining native apps,
+visibility, custody and journals. Preserve every non-selection worker unit setting,
+including its home-placements argument. A worker restart does not authorize
+interrupting human sessions or a global Stop.
+
+After accepted membership/governance changes, recovery finishes forward through
+compatible group artifacts. Old terminated memberships/grants and archived pair
+defaults are not an operational rollback. Historical messages remain readable;
+exact expired retries return their retained outcome without new transmission.

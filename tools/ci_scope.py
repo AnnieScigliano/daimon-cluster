@@ -189,6 +189,8 @@ SDK_FILES = {'requirements-weave.txt', 'clusterctl/onboarding_sdk.py',
     'support/matrix-onboarding/PROVENANCE.json',
     'support/matrix-agent-chat/install_agent_chat.py',
     'support/matrix-agent-chat/PROVENANCE.json', 'tests/test_clusterd.py',
+    'tests/test_onboarding_peer.py',
+    'clusterctl/onboarding_code_successor.py', 'tests/test_onboarding_code_successor.py',
     'tests/integration/test_recovery_rebirth_containers.py',
     'docs/runbooks/tribu-sdk-successor.md'}
 SDK_TESTS = tuple(sorted(set(ONBOARDING_CONTRACTS) | {
@@ -203,6 +205,25 @@ SDK_TESTS = tuple(sorted(set(ONBOARDING_CONTRACTS) | {
     'tests/test_onboarding_credential.py'}))
 
 
+GROUP_FILES = {'tests/test_onboarding_group.py',
+    'clusterctl/onboarding_acceptance.py', 'clusterctl/onboarding_target.py',
+    'clusterctl/onboarding_host.py',
+    'clusterctl/onboarding_peer_host.py', 'clusterctl/onboarding_source.py',
+    'clusterctl/onboarding_runtime.py', 'tools/managed_peer_plan.py',
+    'tests/test_onboarding_peer_host.py', 'AGENTS.md', 'RESUME.md',
+    'docs/design/onboarding-jobs.md'} | SDK_FILES
+GROUP_TESTS = ('tests/test_onboarding_group.py', 'tests/test_onboarding_acceptance.py',
+    'tests/test_onboarding_host.py',
+    'tests/test_onboarding_sdk.py', 'tests/test_onboarding_code_successor.py',
+    'tests/test_onboarding_source.py', 'tests/test_onboarding_peer_host.py',
+    'tests/test_onboarding_owner_client.py', 'tests/test_onboarding_runtime.py',
+    'tests/test_matrix_host.py', 'tests/test_matrix_status.py',
+    'tests/test_onboarding_peer.py::test_actual_native_peer_accept_keeps_credential_receipt_and_receiving_writes',
+    'tests/test_onboarding_target.py', 'tests/test_onboarding_credential.py',
+    'tests/test_admission.py', 'tests/test_production_fences.py',
+    'tests/test_ci_scope.py', 'tests/test_ci_workflow.py')
+
+
 RECEIVING_RUNTIME_FILES = {'clusterctl/onboarding_peer.py', 'clusterctl/onboarding_runtime.py',
     'tests/test_onboarding_peer.py', 'tests/test_onboarding_runtime.py'}
 
@@ -214,6 +235,9 @@ HOME_FILES = {'clusterctl/homes/__init__.py', 'clusterctl/homes/policy.py',
     'clusterctl/homes/styles.py', 'tests/test_home_styles.py',
     'clusterctl/homes/assets/home-style.js', 'clusterctl/homes/assets/artifact-style.js',
     'docs/design/shared-home-styles.md', 'tests/js/home-style-client.cjs',
+    'clusterctl/homes/login.py', 'clusterctl/homes/assets/login.js',
+    'requirements-home-login.txt', 'tests/test_home_login.py', 'docs/design/home-shared-login.md',
+    'tools/qualify_home_login_browser.py',
     'clusterctl/homes/assets/access-client.js', 'tests/test_home_client.py',
     'tests/js/home-access-client.cjs', 'docs/design/home-browser-client.md',
     'clusterctl/homes/examples/library/index.html',
@@ -225,7 +249,7 @@ HOME_FILES = {'clusterctl/homes/__init__.py', 'clusterctl/homes/policy.py',
     'clusterd/assets/fonts/OFL.txt', 'clusterd/assets/fonts/PROVENANCE.json',
     'tests/test_home_access.py', 'tests/test_home_gateway.py', 'tests/test_home_host.py'}
 HOME_TESTS = ('tests/test_home_access.py', 'tests/test_home_gateway.py', 'tests/test_home_host.py',
-              'tests/test_home_passkeys.py', 'tests/test_home_client.py', 'tests/test_home_styles.py',
+              'tests/test_home_passkeys.py', 'tests/test_home_client.py', 'tests/test_home_styles.py', 'tests/test_home_login.py',
               'tests/test_auth.py', 'tests/test_ci_scope.py', 'tests/test_ci_workflow.py')
 
 
@@ -276,6 +300,12 @@ def select(changed: list[str], root: Path) -> tuple[str, list[str]]:
         # Home-only read authority retains auth and workflow contracts. Native
         # custody, dependencies, admission and provisioning changes stay full.
         return 'homes', list(HOME_TESTS)
+    if ('tests/test_onboarding_group.py' in changed
+            and set(changed) <= GROUP_FILES | CI_FILES
+            and all((root / path.split('::', 1)[0]).is_file() for path in GROUP_TESTS)):
+        # Signed group selection, exact SDK and native/receiving contracts.
+        # No changed archive exporter, physical recovery or model lifecycle.
+        return 'sdk', list(GROUP_TESTS)
     if (set(changed) & {'clusterctl/onboarding_peer.py', 'clusterctl/onboarding_runtime.py'}
             and set(changed) <= RECEIVING_RUNTIME_FILES | CI_FILES
             and all((root / path).is_file() for path in SDK_TESTS)):

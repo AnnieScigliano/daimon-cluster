@@ -370,3 +370,101 @@ def test_captured_runtime_can_load_peer_tool_without_checkout_modules(tmp_path):
     denied = subprocess.run([sys.executable, '-B', '-I', '-c', launch, str(output), str(os.geteuid())],
         capture_output=True, check=False, text=True)
     assert denied.returncode != 0
+
+
+def test_signed_peer_restart_adoption_resumes_without_new_ceremony(journey, monkeypatch):
+    from copy import deepcopy
+    from daimon_matrix.authority_epochs import create_authority_epoch
+    from daimon_matrix.identity import create_incarnation_authorization
+    from daimon_matrix.weave import BeingManifest
+    import daimon_matrix.operator_messaging as operator
+
+    tool, sources, public, packet, _ = journey
+    target = sources[1][1]
+    being = public[0]['document']['authority']['manifest']['being_ref']
+    onboarding_peer.accept(target, packet, expected_being=being)
+    current = onboarding_peer.loaded(sources[0][1])
+    document = deepcopy(public[0]['document']['authority'])
+    previous = tool.authority_from_document(document)
+    old = next(row for row in document['manifest']['embodiments'] if row['status'] == 'active')
+    credential = previous.credentials[old['embodiment_credential_id']]
+    incarnation = create_incarnation_authorization(credential, current.service.signer.seed,
+        incarnation_id='incarnation:' + __import__('uuid').uuid4().hex, incarnation_sequence=1,
+        started_at_ms=tool.now() - 1)
+    value = deepcopy(document['manifest'])
+    for row in value['embodiments']:
+        if row['embodiment_id'] == old['embodiment_id']:
+            row['status'] = 'retired'
+    value['embodiments'].append({**old, 'status': 'active',
+        'incarnation_id': incarnation['body']['incarnation_id'],
+        'incarnation_authorization_id': incarnation['artifact_id']})
+    value['embodiments'].sort(key=lambda row: (row['embodiment_id'], row['incarnation_id']))
+    value['revision'] += 1
+    transition = create_authority_epoch(previous.manifest, BeingManifest.from_value(value),
+        embodiment_id=old["embodiment_id"], previous_incarnation_id=old["incarnation_id"],
+        successor_authorization=incarnation, signing_seed=current.service.signer.seed,
+        issued_at_ms=tool.now())
+    history = deepcopy(public[0]['document']['authority_history']) + [dict(
+        manifest=document['manifest'], successor=transition)]
+    document['manifest'] = value
+    document['incarnations'].append(incarnation)
+    tool.authority_from_document(document)
+    own_custody = (target.package / 'runtime/custody.json').read_bytes()
+    ceremony = (onboarding_peer.root(target) / 'accepted-private.json').read_bytes()
+    republish = operator.republish
+    def fail(*args, **kwargs):
+        raise OSError('interrupted before app adoption')
+    monkeypatch.setattr(operator, 'republish', fail)
+    with pytest.raises(OSError):
+        onboarding_peer.adopt_authority(target, document, history)
+    assert target.observe()['phase'] == 'peer-published'
+    monkeypatch.setattr(operator, 'republish', republish)
+    receipt = onboarding_peer.adopt_authority(target, document, history)
+    assert receipt['status'] == 'current' and target.observe()['phase'] == 'v8'
+    assert (target.package / 'runtime/custody.json').read_bytes() == own_custody
+    assert (onboarding_peer.root(target) / 'accepted-private.json').read_bytes() == ceremony
+    selected = files(onboarding_peer.root(target))
+    assert onboarding_peer.adopt_authority(target, document, history) == receipt
+    assert files(onboarding_peer.root(target)) == selected
+    changed = deepcopy(document)
+    changed['manifest']['embodiments'][0]['body_ref'] = 'unapproved-substitution'
+    with pytest.raises(OnboardingError, match='onboarding_peer_successor_conflict'):
+        onboarding_peer.adopt_authority(target, changed, history)
+    # The same accepted link supports a second descendant, with a lost ACK
+    # before republication and an exact idempotent retry afterwards.
+    first_document = deepcopy(document)
+    old = next(row for row in document['manifest']['embodiments'] if row['status'] == 'active')
+    incarnation = create_incarnation_authorization(credential, current.service.signer.seed,
+        incarnation_id='incarnation:' + __import__('uuid').uuid4().hex, incarnation_sequence=2,
+        started_at_ms=tool.now() - 1)
+    value = deepcopy(document['manifest'])
+    for row in value['embodiments']:
+        if row['status'] == 'active':
+            row['status'] = 'retired'
+    value['embodiments'].append({**old, 'status': 'active',
+        'incarnation_id': incarnation['body']['incarnation_id'],
+        'incarnation_authorization_id': incarnation['artifact_id']})
+    value['embodiments'].sort(key=lambda row: (row['embodiment_id'], row['incarnation_id']))
+    value['revision'] += 1
+    transition = create_authority_epoch(BeingManifest.from_value(document['manifest']),
+        BeingManifest.from_value(value), embodiment_id=old['embodiment_id'],
+        previous_incarnation_id=old['incarnation_id'], successor_authorization=incarnation,
+        signing_seed=current.service.signer.seed, issued_at_ms=tool.now())
+    history.append(dict(manifest=document['manifest'], successor=transition))
+    document['manifest'] = value
+    document['incarnations'].append(incarnation)
+    monkeypatch.setattr(operator, 'republish', fail)
+    with pytest.raises(OSError):
+        onboarding_peer.adopt_authority(target, document, history)
+    assert target.observe()['phase'] == 'peer-published'
+    monkeypatch.setattr(operator, 'republish', republish)
+    receipt = onboarding_peer.adopt_authority(target, document, history)
+    assert receipt['status'] == 'current' and target.observe()['phase'] == 'v8'
+    selected = files(onboarding_peer.root(target))
+    assert onboarding_peer.adopt_authority(target, document, history) == receipt
+    assert files(onboarding_peer.root(target)) == selected
+    assert len(list(onboarding_peer.root(target).glob('authority-successor-*.json'))) == 1
+    assert (target.package / 'runtime/custody.json').read_bytes() == own_custody
+    assert (onboarding_peer.root(target) / 'accepted-private.json').read_bytes() == ceremony
+    with pytest.raises(OnboardingError, match='onboarding_peer_successor_conflict'):
+        onboarding_peer.adopt_authority(target, first_document, history[:-1])

@@ -201,8 +201,9 @@ class Backend:
 
 
 class Application:
-    def __init__(self, config, authority, sessions, *, backends=None, passkey_rp_id=None, client_example=False, style_provider=None):
+    def __init__(self, config, authority, sessions, *, backends=None, passkey_rp_id=None, client_example=False, style_provider=None, auth_origin=None, google_client=None):
         self.styles = StyleConsumer(style_provider, authority, config["homes"]) if style_provider else None
+        self.sso = None
         self.client_example = client_example
         self.config, self.homes, self.authority, self.sessions = (
             config,
@@ -233,6 +234,11 @@ class Application:
         if passkey_rp_id:
             from .passkeys import Passkeys
             self.passkeys = Passkeys(self, passkey_rp_id)
+        if auth_origin:
+            from .login import Login, Google
+            self.sso = Login(self, auth_origin, Google(google_client) if google_client else None)
+        elif google_client:
+            raise ValueError('google_requires_shared_login')
 
     def identity(self, token, home, origin):
         row = self.sessions.resolve(token, home=home, origin=origin)
@@ -335,7 +341,8 @@ class Application:
                 )
             }
         if operation == "approve-browser":
-            if set(payload) != {"home", "code"} or payload["home"] not in self.homes:
+            if set(payload) != {"home", "code"} or (payload["home"] not in self.homes and
+                    not (self.sso and payload['home']==self.sso.context)):
                 raise ValueError("invalid_home_browser_approval")
             pair = self.authority.actor(self.authority.paired_human(home))
             if not pair or pair.kind != "human":
@@ -414,13 +421,16 @@ def return_target(value):
     return value
 
 
-def auth_controls(subject, vpn, passkeys, return_path='/'):
+def auth_controls(subject, vpn, passkeys, return_path='/', shared_login=False):
     if subject:
         controls = '<form method="post" action="/access/logout"><button>Sign out</button></form>'
         if passkeys and subject.kind == 'human' and not vpn:
             controls = '<a href="/access/keys">Access keys</a>' + controls
         return controls, ''
     code_url = '/access?' + urlencode({'return': return_target(return_path)})
+    if shared_login and not vpn:
+        return ('<button id="passkey-action" type="button" data-mode="sso">Sign in</button>',
+                '<script src="/access-client.js" defer></script><script src="/passkeys.js" defer></script>')
     if passkeys and not vpn:
         return ('<button id="passkey-action" type="button" data-mode="login" '
                 'data-reload="true">Sign in</button><a data-code-login href="' +
@@ -429,7 +439,7 @@ def auth_controls(subject, vpn, passkeys, return_path='/'):
     return '<a href="' + html.escape(code_url, quote=True) + '">Sign in</a>', ''
 
 
-def render(home, works, subject, vpn, *, signed_out=False, passkeys=False, key_revoked=False, return_path='/'):
+def render(home, works, subject, vpn, *, signed_out=False, passkeys=False, key_revoked=False, return_path='/', shared_login=False):
     esc = html.escape
     cards = "".join(
         "<article><small>"
@@ -452,7 +462,7 @@ def render(home, works, subject, vpn, *, signed_out=False, passkeys=False, key_r
         if subject
         else ("Dedicated VPN" if vpn else "Public view")
     )
-    auth, script = auth_controls(subject, vpn, passkeys, return_path)
+    auth, script = auth_controls(subject, vpn, passkeys, return_path, shared_login)
     notice = (
         '<p role="status">You’re signed out. Only work available without your '
         'personal access is shown.</p>'
@@ -544,7 +554,7 @@ def preview(app, home, reference, version, subject, vpn, *, origin, parent_token
         + "</a></li>"
         for filename in selected["files"]
     )
-    auth, script = auth_controls(subject, vpn, bool(app.passkeys), '/view/' + reference)
+    auth, script = auth_controls(subject, vpn, bool(app.passkeys), '/view/' + reference, bool(app.sso))
     return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(selected["title"])} · {esc(app.homes[home]["name"])}</title><link rel="stylesheet" href="/home.css"><script src="/home-style.js" defer></script>{script}</head><body><main><nav><a href="/">← Home</a>{auth}</nav><p id="passkey-status" role="status" aria-live="polite"></p><header><small>{esc(selected["visibility"])} · {"Current version" if version == "current" else "Earlier version"}</small><h1>{esc(selected["title"])}</h1><p>{esc(selected["summary"])}</p><a href="{esc(source, quote=True)}">Open selected work ↗</a></header>{display}<details><summary>Selected files</summary><ul>{files}</ul></details><details><summary>Versions available to you</summary><ul>{"".join(versions)}</ul></details></main></body></html>'''.encode()
 
 
@@ -578,7 +588,7 @@ def handler(app, *, owner=False):
             self._headers_sent = True
             super().end_headers()
 
-        def respond(self, status, body, kind="application/json", cookies=(), headers=()):
+        def respond(self, status, body, kind="application/json", cookies=(), headers=(), form_action="'self'"):
             if isinstance(body, dict):
                 body = json.dumps(body).encode()
             self.send_response(status)
@@ -586,9 +596,10 @@ def handler(app, *, owner=False):
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
-            # Browser form POSTs under no-referrer serialize their Origin as
-            # null. Keep same-origin proofs while disclosing no cross-site URL.
-            self.send_header("Referrer-Policy", "same-origin")
+            # The single exact-origin login return must preserve its Origin
+            # on a cross-host form POST. Only the public origin is disclosed;
+            # its request query and response secret never become a Referer.
+            self.send_header("Referrer-Policy", "strict-origin" if form_action != "'self'" else "same-origin")
             self.send_header("Permissions-Policy",
                              "publickey-credentials-create=(self), publickey-credentials-get=(self)")
             frames = " ".join(
@@ -602,7 +613,7 @@ def handler(app, *, owner=False):
                 + frames
                 + "; media-src "
                 + frames
-                + "; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+                + "; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action " + form_action,
             )
             for cookie in cookies:
                 self.send_header("Set-Cookie", cookie)
@@ -612,7 +623,7 @@ def handler(app, *, owner=False):
             if self.command != "HEAD":
                 self.wfile.write(body)
 
-        def context(self):
+        def context(self, *, login_callback=False):
             home = self.headers.get("X-Daimon-Home", "")
             network = self.headers.get("X-Daimon-Vpn", "")
             if not home:
@@ -629,7 +640,8 @@ def handler(app, *, owner=False):
                 "vpn_url" if network == "1" else "public_url"
             ].rstrip("/")
             supplied = self.headers.get("Origin")
-            if supplied is not None and supplied != origin:
+            expected = app.sso.origin if login_callback and app.sso else origin
+            if supplied is not None and supplied != expected:
                 raise ValueError("cross_origin_home_request")
             host = self.headers.get("Host", "")
             if host != urlsplit(origin).netloc:
@@ -655,6 +667,9 @@ def handler(app, *, owner=False):
                 self.respond(404, {})
                 return
             try:
+                if app.sso:
+                    from .login import routes
+                    if routes(self, app, 'GET'): return
                 content_origins = {
                     urlsplit(app.config[k]).netloc: app.config[k].rstrip("/")
                     for k in ("content_public_url", "content_vpn_url")
@@ -681,6 +696,7 @@ def handler(app, *, owner=False):
                             passkeys=bool(app.passkeys),
                             key_revoked=parse_qs(urlsplit(self.path).query).get('key-revoked') == ['1'],
                             return_path=self.path,
+                            shared_login=bool(app.sso),
                         ),
                         "text/html; charset=utf-8",
                     )
@@ -706,6 +722,7 @@ def handler(app, *, owner=False):
                         "visitor": {"name": subject.name, "kind": subject.kind} if subject else None,
                         "dedicated_vpn": vpn,
                         "passkeys": bool(app.passkeys) and not vpn,
+                        **({'shared_login':True} if app.sso and not vpn else {}),
                     })
                 elif path == "/access-client.js":
                     self.respond(200, (Path(__file__).parent / "assets" / "access-client.js").read_bytes(),
@@ -799,6 +816,12 @@ def handler(app, *, owner=False):
                         ).read_bytes(),
                         "font/woff2",
                     )
+                elif path == '/access/sso/start' and app.sso and not vpn:
+                    destinations = parse_qs(urlsplit(self.path).query).get('return', ['/'])
+                    if len(destinations)!=1: raise ValueError('invalid_home_return')
+                    request,proof=app.sso.begin(home,origin,destinations[0])
+                    self.respond(303,b'',cookies=(f'__Host-home-sso={proof}; Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=300',),
+                        headers=(('Location',app.sso.origin+'/signin?'+urlencode({'request':request})),))
                 elif path == "/access":
                     destinations = parse_qs(urlsplit(self.path).query).get('return', ['/'])
                     if len(destinations) != 1:
@@ -1024,7 +1047,24 @@ def handler(app, *, owner=False):
                         200, app.owner(unquote(parts[2]), token[7:], parts[3], payload)
                     )
                     return
-                home, origin, subject, vpn, cookies, token = self.context()
+                if app.sso:
+                    from .login import routes
+                    if routes(self, app, 'POST', data): return
+                callback = urlsplit(self.path).path == '/access/sso/finish' and bool(app.sso)
+                home, origin, subject, vpn, cookies, token = self.context(login_callback=callback)
+                if callback:
+                    if vpn or self.headers.get('Origin') != app.sso.origin or self.headers.get('Authorization'):
+                        raise ValueError('login_callback_origin_mismatch')
+                    payload=parse_qs(data.decode(),keep_blank_values=True,strict_parsing=True)
+                    if set(payload)!={'request','response'} or any(len(v)!=1 for v in payload.values()):
+                        raise ValueError('invalid_login_callback')
+                    proof=cookies['__Host-home-sso'].value if cookies.get('__Host-home-sso') else ''
+                    session,destination=app.sso.redeem(home,origin,payload['request'][0],payload['response'][0],proof)
+                    self.respond(303,b'',cookies=(
+                        f'__Host-home={session}; Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=604800',
+                        '__Host-home-sso=; Secure; HttpOnly; SameSite=Lax; Path=/; Max-Age=0'),
+                        headers=(('Location',destination),))
+                    return
                 if self.headers.get("Origin") != origin:
                     raise ValueError("home_post_requires_exact_origin")
                 path = urlsplit(self.path).path
@@ -1075,7 +1115,6 @@ def handler(app, *, owner=False):
                         headers=(("Location", "/?signed-out=1"),) if browser else (),
                     )
                 elif path == "/access/claim":
-                    from urllib.parse import parse_qs
 
                     payload = parse_qs(data.decode(), strict_parsing=True)
                     if (
@@ -1123,6 +1162,8 @@ def main():
     parser.add_argument("--config", required=True)
     parser.add_argument("--passkey-rp-id", help="Enable shared passkeys for exact configured public home origins")
     parser.add_argument("--client-example", action="store_true", help="Serve the optional independently authored library client")
+    parser.add_argument('--auth-origin', help='Exact trusted shared login origin under the passkey RP')
+    parser.add_argument('--google-client', help='Private optional Google OIDC client JSON file')
     args = parser.parse_args()
     from daimon_matrix.messaging_config import protected_read
 
@@ -1136,7 +1177,8 @@ def main():
         authority_source=Path(config["authority_source"]),
         human_rosters=registry.rosters,
     )
-    app = Application(config, authority, sessions, passkey_rp_id=args.passkey_rp_id, client_example=args.client_example)
+    app = Application(config, authority, sessions, passkey_rp_id=args.passkey_rp_id, client_example=args.client_example,
+                      auth_origin=args.auth_origin, google_client=args.google_client)
     servers = [
         ThreadingHTTPServer(("127.0.0.1", config[key]), handler(app, owner=owner))
         for key, owner in (("viewer_port", False), ("owner_port", True))

@@ -262,18 +262,31 @@ def child_main(home, plan, genesis, descriptor, ready_descriptor, guardian_pid,
                    dict(egress_factory=daemon._visibility_factory(visibility_installation, clock=clock)))
         hosted = runtime.load_runtime(target.package/'runtime', 'runtime.json', target._reader,
             clock=clock, body_reader=body_reader, **options)
+        from .onboarding_peer import group_application
+        group = group_application(target, hosted)
+        if group is not None:
+            # Reuse the same admitted daemon, native lock and visibility adapter.
+            # A group selection replaces bootstrap/default pair apps, not history.
+            messaging_application = Path(group['directory'])
+            visibility_installation = Path(group['visibility'])
         if messaging_application is not None:
             from dataclasses import replace
             from daimon_matrix.chat_host import application_view
             peer = application_view(hosted, messaging_application, visibility_installation)
-            peer = replace(peer, socket_path=hosted.state_root / 'peer.sock')
+            peer = replace(peer, socket_path=hosted.state_root /
+                ('peer.sock' if group is None else group['socket']))
         def request_stop(_number, _frame):
             stopping.set()
         signal.signal(signal.SIGTERM, request_stop)
         signal.signal(signal.SIGINT, request_stop)
         if messaging_application is not None:
             from .onboarding_views import serve_views
-            serve_views([hosted, peer], stopping, ready_descriptor=ready_descriptor)
+            from .onboarding_peer import additional_applications
+            extras = [] if group is not None else [replace(
+                application_view(hosted, Path(row['directory']), Path(row['visibility'])),
+                socket_path=hosted.state_root / row['socket'])
+                for row in additional_applications(target)]
+            serve_views([hosted, peer, *extras], stopping, ready_descriptor=ready_descriptor)
         else:
             daemon.serve_forever(hosted, stop=stopping, ready_descriptor=ready_descriptor)
         return 0

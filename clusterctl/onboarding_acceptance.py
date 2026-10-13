@@ -604,7 +604,7 @@ class SSHLogins(Progress):
         return value
 
 
-def matrix_delivery_result(response, send_id):
+def matrix_delivery_result(response, send_id, recipient=None):
     """Native intake receipts prove transport, never a conscious agent read."""
     import hashlib
     import json
@@ -613,6 +613,30 @@ def matrix_delivery_result(response, send_id):
     if not isinstance(response, dict):
         return {'verified': False}
     value = response.get('result')
+    if (response.get('ok') is True and response.get('error') is None
+            and isinstance(value, dict) and value.get('schema') == 'dm.tribe.delivery/v1'
+            and value.get('send_id') == send_id and recipient is not None):
+        # A complete group vector can remain pending for offline sibling bodies.
+        # Qualify the requested receiving being through its signed delivered leg,
+        # rather than claiming that an ACK or every audience body completed.
+        audience = value.get('audience')
+        semantic = value.get('semantic')
+        if not isinstance(audience, list) or not isinstance(semantic, dict):
+            return {'verified': False}
+        selected = [row for row in audience if isinstance(row, dict) and row.get('being_ref') == recipient]
+        if (not isinstance(semantic.get('legs'), list) or any(
+                not isinstance(row.get('membership_ref'), str)
+                or not isinstance(row.get('embodiment_id'), str) for row in selected)):
+            return {'verified': False}
+        targets = {(row['membership_ref'], row['embodiment_id'])
+            for row in selected}
+        delivered = any(isinstance(leg, dict) and leg.get('state') == 'delivered'
+            and (leg.get('recipient_id'), leg.get('receipt_origin_embodiment_id')) in targets
+            for leg in semantic.get('legs', []))
+        if not targets or not delivered:
+            return {'verified': False}
+        return {'verified': True, 'agent_read': False,
+            'native_receipt_sha256': hashlib.sha256(json.dumps(response, sort_keys=True, separators=(',', ':')).encode()).hexdigest()}
     if (response.get('ok') is not True or response.get('error') is not None
             or not isinstance(value, dict) or value.get('send_id') != send_id
             or value.get('phase') != 'message' or value.get('transport_status') != 'recipient-intake'
@@ -651,24 +675,29 @@ def matrix_delivery_probe(payload, parameters, recipient, send=False):
     assert binding == dict(schema='dm.agent-chat.binding/v1', socket=chat['socket'],
         client_config=str(Path(chat['application']) / 'client.json'),
         client_key=str(Path(chat['application']) / 'client.key'),
-        request_dir=str(attachment / 'requests'), incoming_channels=['peer-in'], outgoing_channels=['peer-out'])
+        request_dir=str(attachment / 'requests'), incoming_channels=chat.get('incoming_channels',['peer-in']), outgoing_channels=chat.get('outgoing_channels',['peer-out']))
     native = ClientConfig.load(root / 'runtime/client.json', protected_read(root / 'runtime/client.key', size=32))
     client = bridge(binding).client
     assert client.config.expected_server == native.expected_server and client.config.runtime_id == native.runtime_id
     assert all(native.expected_server[k] == v for k, v in payload['origin'].items())
     application = json.loads(protected_read(Path(chat['application']) / 'application.json'))
-    assert application['outgoing']['recipient_being_ref'] == recipient
-    assert application['incoming']['recipient_being_ref'] == payload['being_ref']
-    assert parameters['channel_id'] == 'peer-out'
-    query = dict(channel_id='peer-out', send_id=parameters['send_id'])
+    group = application['schema'] == 'dm.messaging.application/v3'
+    if group:
+        assert any(row['manifest']['being_ref'] == recipient for row in application['authorities'])
+        assert parameters['channel_id'] == application['tribe']['channel_id'] == 'tribe'
+    else:
+        assert application['outgoing']['recipient_being_ref'] == recipient
+        assert application['incoming']['recipient_being_ref'] == payload['being_ref']
+        assert parameters['channel_id'] == 'peer-out'
+    query = dict(channel_id=parameters['channel_id'], send_id=parameters['send_id'])
     observed = asyncio.run(call(binding, 'messaging_delivery', query, timeout=45))
-    result = matrix_delivery_result(observed, parameters['send_id'])
+    result = matrix_delivery_result(observed, parameters['send_id'], recipient)
     if not result['verified'] and send:
         # Exact persisted arguments and native request journal own retry safety.
         # A lost send ACK is reconciled by delivery on the next invocation.
         asyncio.run(call(binding, 'messaging_send', parameters, timeout=45))
         observed = asyncio.run(call(binding, 'messaging_delivery', query, timeout=45))
-        result = matrix_delivery_result(observed, parameters['send_id'])
+        result = matrix_delivery_result(observed, parameters['send_id'], recipient)
     return result
 
 
@@ -686,7 +715,7 @@ class MatrixIntents(Progress):
             raise OnboardingError('invalid_matrix_delivery_evidence')
         params = value['parameters']
         if (not isinstance(params, dict) or set(params) != {'channel_id', 'send_id', 'thread_id', 'text'}
-                or params['channel_id'] != 'peer-out' or not isinstance(params['text'], str) or not 1 <= len(params['text']) <= 4096):
+                or params['channel_id'] not in {'peer-out','tribe'} or not isinstance(params['text'], str) or not 1 <= len(params['text']) <= 4096):
             raise OnboardingError('invalid_matrix_delivery_evidence')
         for key in ('send_id', 'thread_id'):
             try:
@@ -1118,7 +1147,7 @@ class HostedChecks:
         if parameters is None and existing is not None:
             parameters = existing['parameters']
         if parameters is None:
-            parameters = dict(channel_id='peer-out',
+            parameters = dict(channel_id=payload['chat'].get('outgoing_channels',['peer-out'])[0],
                 send_id=str(uuid.uuid5(uuid.NAMESPACE_URL, 'cluster-hosted-matrix-intent/v1:send:' + digest(plan))),
                 thread_id=str(uuid.uuid5(uuid.NAMESPACE_URL, 'cluster-hosted-matrix-intent/v1:thread:' + digest(plan))),
                 text='Technical Matrix delivery verification requested by Nicolas, operated by Source on this hosted body. '
@@ -1172,7 +1201,7 @@ class HostedChecks:
                 or not isinstance(response.get('server'), dict)
                 or any(response['server'].get(key) != value for key, value in payload['origin'].items())):
             raise OnboardingError('invalid_matrix_delivery_evidence')
-        probe = matrix_delivery_result(response, intent['parameters']['send_id'])
+        probe = matrix_delivery_result(response, intent['parameters']['send_id'], intent['recipient_being_ref'])
         receipt = MatrixDeliveries.validate(dict(schema='cluster-hosted-matrix-delivery/v1',
             name=plan['name'], owner=plan['owner'], plan_digest=digest(plan), intent=intent, probe=probe))
         try:

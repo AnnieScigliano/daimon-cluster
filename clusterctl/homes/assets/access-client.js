@@ -51,7 +51,18 @@
         return request("/access/passkeys/" + mode + "-finish", {nonce: start.nonce, credential: payload(credential)}, signal);
       });
     }
+    async function signIn({signal} = {}) {
+      if (!window.isSecureContext || window.top !== window.self || location.origin === "null")
+        throw new DOMException("Use a trusted top-level browser page.", "NotSupportedError");
+      const access = await request("/access/status", undefined, signal);
+      if (access.shared_login) {
+        location.assign("/access/sso/start" + codeURL().slice("/access".length));
+        return {status: "redirecting"};
+      }
+      return ceremony("login", signal);
+    }
     return Object.freeze({supported, codeURL,
+      signIn,
       status: ({signal} = {}) => request("/access/status", undefined, signal),
       catalog: ({signal} = {}) => request("/catalog.json", undefined, signal),
       login: ({signal} = {}) => ceremony("login", signal),

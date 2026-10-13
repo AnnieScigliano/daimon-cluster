@@ -1,5 +1,20 @@
 # Daimon V0 release-candidate checkpoint
 
+## Current communication target — 2026-10-13
+
+CompAII, Eko and Oliva now use one signed membership group, demonstrated with
+actual three-body semantic receipts and connected replies. Matrix PR #330 is
+merged; the selected SDK source is `cdafbc0513d43c39f03be6e8b1b0636b9e4e9422`.
+Group selectors replace the former Source/member and temporary repair defaults.
+Admission means invitation and signed acceptance in the existing Tribe, never
+another founder/member Tribe or per-pair proxy enrollment. The maintained worker
+recognizes signed receiving group selections and reports a missing enrollment
+explicitly; it must not reconstruct archived links. Legacy directed repair is
+an explicit operator API only, outside worker execution. Current group sends
+freeze all active Root bodies and report unavailable routes honestly. Delivery
+receipts establish authenticated intake, not model reading or automatic reply.
+No model wakeup or native session restart accompanies this deployment.
+
 Last reconciled: 2026-10-07.
 
 ## Onboarding SDK successor

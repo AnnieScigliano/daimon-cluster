@@ -64,6 +64,8 @@ class Sessions:
             CREATE TABLE IF NOT EXISTS owner_credentials(
               digest TEXT PRIMARY KEY, home TEXT NOT NULL, actor TEXT NOT NULL,
               revision TEXT NOT NULL, revoked INTEGER NOT NULL DEFAULT 0);
+            CREATE TABLE IF NOT EXISTS session_parents(
+              child TEXT PRIMARY KEY, parent TEXT NOT NULL);
             """)
 
     def connect(self):
@@ -113,6 +115,25 @@ class Sessions:
                 db.rollback()
                 raise
 
+    def active(self, db, row, now, *, max_age=None):
+        """Check session ancestry inside the caller's existing transaction."""
+        seen = set()
+        for _ in range(8):
+            if (not row or row['revoked'] or not row['created'] <= now < row['expires']
+                    or row['digest'] in seen or (max_age is not None and now-row['created'] > max_age)):
+                return False
+            seen.add(row['digest'])
+            parent = db.execute('SELECT parent FROM session_parents WHERE child=?',
+                                (row['digest'],)).fetchone()
+            if not parent:
+                return True
+            source = db.execute('SELECT * FROM sessions WHERE digest=?',
+                                (parent['parent'],)).fetchone()
+            if not source or (source['actor'], source['revision']) != (row['actor'], row['revision']):
+                return False
+            row = source
+        return False
+
     def resolve(self, token, *, home, origin):
         if not isinstance(token, str) or not re.fullmatch(r"[A-Za-z0-9_-]{43}", token):
             return None
@@ -127,8 +148,7 @@ class Sessions:
                     row
                     and row["home"] == home
                     and row["origin"] == origin
-                    and not row["revoked"]
-                    and row["created"] <= now < row["expires"]
+                    and self.active(db, row, now)
                 )
                 db.commit()
                 return dict(row) if valid else None
@@ -363,8 +383,7 @@ class Sessions:
                     valid = (
                         parent
                         and parent["home"] == row["home"]
-                        and not parent["revoked"]
-                        and parent["created"] <= now < parent["expires"]
+                        and self.active(db, parent, now)
                         and (parent["actor"], parent["revision"])
                         == (row["actor"], row["revision"])
                     )

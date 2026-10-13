@@ -76,13 +76,23 @@ def telegram_fixture(tmp_path, monkeypatch):
     return base, fingerprint, source, profile, candidate
 
 
-def test_qualified_telegram_successor_changes_only_explicit_software(tmp_path, monkeypatch):
+@pytest.mark.parametrize('retained', [False, True])
+def test_qualified_telegram_successor_changes_only_explicit_software(tmp_path, monkeypatch, retained):
     from clusterctl import onboarding_telegram as telegram
     base, original, source, _, candidate = telegram_fixture(tmp_path, monkeypatch)
+    expected_commit = telegram.COMMIT
+    if retained:
+        # An unrelated SDK successor can retain the already-qualified consumer.
+        value = json.loads((candidate / 'artifact.json').read_bytes())
+        monkeypatch.setattr(telegram, 'RETAINED_CURRENT_BINARY', value['binary_sha256'])
+        value.update(commit=telegram.RETAINED_CURRENT_COMMIT,
+            archive_sha256=telegram.RETAINED_CURRENT_ARCHIVE)
+        (candidate / 'artifact.json').write_text(json.dumps(value))
+        expected_commit = telegram.RETAINED_CURRENT_COMMIT
     output = tmp_path / 'telegram-successor'
     result = build(base, original, source, ('onboarding_target.py',), output, telegram=candidate)
     verify(output, result['runtime_digest'], base, original, uid=os.geteuid())
-    assert telegram.artifact(output, uid=os.geteuid())['commit'] == telegram.COMMIT
+    assert telegram.artifact(output, uid=os.geteuid())['commit'] == expected_commit
     assert telegram.artifact(base, uid=os.geteuid())['commit'] == telegram.PREVIOUS_COMMIT
     for name in ('inheritance.md', 'hmk/scripts/memoryctl.py', 'sdk/pinned.whl'):
         assert (output / name).read_bytes() == (base / name).read_bytes()

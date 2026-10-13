@@ -66,3 +66,27 @@ test('default-page adapter only disables its own controls and preserves cancella
   vm.runInContext(fs.readFileSync('clusterctl/homes/assets/passkeys.js','utf8'),f.ctx);
   await handlers.click();assert.equal(action.disabled,false);assert.match(status.textContent,/Nothing changed/);
 });
+test('shared sign-in remains a navigation route when this WebView cannot use WebAuthn',async()=>{
+  const f=fixture();f.ctx.window.PublicKeyCredential=undefined;
+  let click,destination;
+  const action={dataset:{mode:'sso'},disabled:false,addEventListener:(_,fn)=>{click=fn;}};
+  const status={textContent:''};
+  f.ctx.document={getElementById:id=>id==='passkey-action'?action:status,querySelectorAll:()=>[]};
+  f.ctx.location.assign=value=>{destination=value;};
+  vm.runInContext(fs.readFileSync('clusterctl/homes/assets/passkeys.js','utf8'),f.ctx);
+  assert.equal(action.disabled,false);await click();
+  assert.equal(destination,'/access/sso/start?return=%2Fdifferent%3Fq%3D1%23part');
+  assert.equal(f.calls.length,0);
+});
+test('independent client shared sign-in navigates without requiring a local ceremony',async()=>{
+  const f=fixture();let destination;
+  f.ctx.window.PublicKeyCredential=undefined;
+  f.ctx.fetch=async path=>{f.calls.push({path});return {ok:true,json:async()=>({shared_login:true})};};
+  f.ctx.location.assign=value=>{destination=value;};
+  const result=await f.client.signIn();
+  assert.equal(result.status,'redirecting');
+  assert.equal(destination,'/access/sso/start?return=%2Fdifferent%3Fq%3D1%23part');
+  assert.deepEqual(f.calls.map(x=>x.path),['/access/status']);
+  f.ctx.window.top={};await assert.rejects(f.client.signIn(),{name:'NotSupportedError'});
+  assert.equal(f.calls.length,1);
+});

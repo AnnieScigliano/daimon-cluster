@@ -43,6 +43,8 @@ jobs:
             requirements.txt
             requirements-weave.txt
             requirements-dev.txt
+            requirements-homes.txt
+            requirements-home-login.txt
             constraints.txt
       - name: Harden and record the trusted qualification interpreter
         if: needs.scope.outputs.profile == 'full'
@@ -272,7 +274,7 @@ jobs:
       - run: python -m pip install -c constraints.txt -r requirements-dev.txt
       - name: Install optional home passkey adapter
         if: needs.scope.outputs.profile == 'homes' || needs.scope.outputs.profile == 'full'
-        run: python -m pip install -c constraints.txt -r requirements-homes.txt
+        run: python -m pip install -c constraints.txt -r requirements-homes.txt -r requirements-home-login.txt
       - name: Verify exact Matrix source pin
         run: |
           python - <<'PY'
@@ -479,7 +481,7 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           repository: AlterMundi/daimon-matrix
-          ref: 70a1fc273022675c47acdd1773b6bd07be4b9f23
+          ref: cdafbc0513d43c39f03be6e8b1b0636b9e4e9422
           path: matrix-source
           fetch-depth: 0
           persist-credentials: false
@@ -495,7 +497,7 @@ jobs:
           done
           docker version
           test "$(git -C matrix-source rev-parse HEAD)" = \
-            70a1fc273022675c47acdd1773b6bd07be4b9f23
+            cdafbc0513d43c39f03be6e8b1b0636b9e4e9422
       - name: Prove isolated recovery roles and read-only snapshot restore
         env:
           DAIMON_RUN_DOCKER_RECOVERY_TESTS: "1"

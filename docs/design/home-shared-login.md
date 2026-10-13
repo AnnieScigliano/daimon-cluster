@@ -1,0 +1,74 @@
+# Shared home login
+
+The optional shared login authority reuses existing Matrix human identities,
+pairings, session state and registered passkeys. Authentication never creates an
+artifact grant. A human authenticated in another owner's home remains a visitor;
+that home's `human`, `individual`, Tribe and VPN audiences keep their meanings.
+
+Enable the trusted gateway with `--passkey-rp-id DOMAIN --auth-origin ORIGIN`.
+The login origin must be a separate HTTPS host within the passkey RP domain,
+distinct from home and isolated-content origins. Public wildcard routing already
+serves the gateway. Do not give artifact frames access to login cookies or routes.
+
+## Browser journey
+
+A home's Sign in button starts an exact-origin handoff. The login page requests
+the existing passkey immediately, then returns to the same path, query and
+fragment. If already signed in centrally, the handoff needs no new ceremony.
+The initiating home has a host-only HttpOnly proof cookie; the login authority
+sends a separate one-use response secret by form POST. Neither a copied public
+request ID nor a different browser can redeem the response. Requests expire
+after five minutes; responses expire after one minute. The callback accepts
+only the configured login Origin and never VPN or bearer identity.
+
+First identification and recovery still belong to the human's own daimon.
+Approve the central code through the existing command with
+`approve-browser --home dm.home-login/v1 --code CODE`. The authenticating owner
+credential identifies only its own currently paired human, irrespective of the
+destination home. Existing local-home approval remains compatible.
+
+Home sign-out revokes that home's session. Central sign-out revokes the shared
+session and its derived home sessions and private-content tickets. Sessions
+created independently before adoption are not descendants and retain their own
+logout controls. The signed-out page does not immediately launch another
+fingerprint prompt. Credential revocation and current identity revisions still
+invalidate sessions. No cross-domain cookie is installed.
+
+## Optional Google identity
+
+Install `requirements-home-login.txt` alongside the existing optional passkey
+adapter in the gateway's candidate environment. Configure `--google-client FILE`
+with owner-only JSON containing `client_id` and `client_secret`; do not put this
+file or OAuth responses in source, issues or logs. Register a Google Web
+application redirect URI equal to the login origin plus `/google/callback`.
+The [official Google OIDC documentation](https://developers.google.com/identity/openid-connect/openid-connect)
+describes the client and consent-screen setup.
+
+An already identified human explicitly chooses to link Google. The verified
+Google issuer and stable `sub` identify the external account; email matching is
+never used. Only `openid` is requested, without access to Drive, Gmail or other
+Google services. State, a browser proof, nonce and PKCE bind the callback.
+The official Google ID-token verifier checks signature, issuer, audience and
+expiry. An unknown Google account cannot create a Matrix human or gain access.
+
+Unlinking requires a fresh passkey or approved recovery ceremony. It revokes
+Google-derived sessions and their descendants while preserving passkey login.
+A replacement Google account may be linked after unlinking; the prior mapping
+remains recorded and cannot silently transfer to a different human. Link/unlink
+history is private operational state, not public home content.
+
+## Adoption and rollback
+
+Services use this existing gateway handoff and identity authority, with exact
+registered return origins and their own resource authorization. Homemaker must
+authorize its human/pair writes against the resolved identity; login alone does
+not authorize design changes. Isolated artifacts can request a trusted parent
+sign-in journey but cannot run ceremonies or handle credentials themselves.
+
+The feature is opt-in. Retain the previous release and interpreter during the
+reviewed gateway deployment. Rolling back removes shared-login routing while
+preserving existing passkeys, publication history, grants and original sessions.
+New shared sessions require the successor's parent checks; do not expose them
+through a predecessor handler without invalidating those sessions first.
+Technical protocol and browser evidence are distinct from human phone acceptance
+and a real configured Google exchange.

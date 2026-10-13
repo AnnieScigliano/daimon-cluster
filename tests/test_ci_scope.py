@@ -339,6 +339,15 @@ def test_closed_runbook_docs_skip_runtime_jobs_but_mixed_changes_keep_coverage()
     assert "if: needs.scope.outputs.profile != 'docs'" in test_job
 
 
+def test_membership_group_successor_keeps_receiving_contracts_without_physical_jobs(tmp_path):
+    from tools.ci_scope import GROUP_FILES, GROUP_TESTS
+    changed = sorted(GROUP_FILES)
+    assert select(changed, ROOT) == ('sdk', list(GROUP_TESTS))
+    assert select(changed, tmp_path) == ('full', ['tests'])
+    for boundary in ('clusterctl/production_fences.py', 'constraints.txt', 'unknown.py'):
+        assert select(changed + [boundary], ROOT) == ('full', ['tests'])
+
+
 def test_homes_keep_read_auth_contracts_and_shared_changes_keep_full(tmp_path):
     from tools.ci_scope import HOME_FILES, HOME_TESTS
     assert select(sorted(HOME_FILES),ROOT)==('homes',list(HOME_TESTS))
