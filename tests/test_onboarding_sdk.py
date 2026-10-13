@@ -12,7 +12,7 @@ from tests.test_onboarding_guest import artifact
 from tools.build_onboarding_sdk import seal
 
 
-def fixture(tmp_path, *, requirements=()):
+def fixture(tmp_path, *, requirements=(), wheel_tag='py3-none-any'):
     code = tmp_path / "code"
     artifact(code)
     (code / "release.json").unlink()
@@ -24,7 +24,7 @@ def fixture(tmp_path, *, requirements=()):
         archive.writestr("daimon_matrix/__init__.py", "# Synthetic dependency-installation fixture only.\n")
         archive.writestr(package + "/METADATA", "Metadata-Version: 2.1\nName: daimon-matrix\nVersion: 0.1.0rc1\n"
                          + ''.join('Requires-Dist: ' + row + '\n' for row in requirements))
-        archive.writestr(package + "/WHEEL", "Wheel-Version: 1.0\nGenerator: test\nRoot-Is-Purelib: true\nTag: py3-none-any\n")
+        archive.writestr(package + "/WHEEL", "Wheel-Version: 1.0\nGenerator: test\nRoot-Is-Purelib: true\nTag: " + wheel_tag + '\n')
         archive.writestr(package + "/RECORD", "")
     seal(root)
     selected = dict(schema=onboarding_release.PROFILE, model="gpt-6.1-sol", reasoning="xhigh",
@@ -106,6 +106,13 @@ def test_hook_free_dependency_check_honors_environment_markers(tmp_path):
         requirements=('missing-synthetic-package>=1; python_version < "0"',))
     venv = onboarding_sdk.install(home, code, fingerprint, code_uid=os.geteuid())
     assert onboarding_sdk.observe(home, code, code_uid=os.geteuid()) == venv
+
+
+def test_hook_free_check_still_rejects_unsupported_installed_wheel_tags(tmp_path):
+    code, fingerprint, home = fixture(tmp_path, wheel_tag='cp99-cp99-unavailable_platform')
+    with pytest.raises(OnboardingError, match='native_onboarding_sdk_refused'):
+        onboarding_sdk.install(home, code, fingerprint, code_uid=os.geteuid())
+    assert not list(home.rglob('installation.json'))
 
 
 def test_changed_wheel_or_requirement_refused_before_home_creation(tmp_path):

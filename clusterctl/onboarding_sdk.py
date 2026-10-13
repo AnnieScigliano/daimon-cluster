@@ -96,16 +96,17 @@ with ensurepip._get_pip_whl_path_ctx() as wheel:
     sys.path.append(str(wheel))
     if mode == 'check':
         from pip._internal.metadata import get_environment
-        from pip._internal.operations.check import PackageDetails, check_package_set
+        from pip._internal.operations.check import PackageDetails, check_package_set, check_unsupported
+        from pip._internal.utils.compatibility_tags import get_supported
+        distributions = list(get_environment([sys.argv[1]]).iter_installed_distributions(
+                local_only=False, skip=()))
         packages = {}
-        for dist in get_environment([sys.argv[1]]).iter_installed_distributions(
-                local_only=False, skip=()):
+        for dist in distributions:
             name = dist.canonical_name
-            if name in packages:
-                raise SystemExit(1)
             packages[name] = PackageDetails(dist.version, list(dist.iter_dependencies()))
         missing, conflicting = check_package_set(packages)
-        raise SystemExit(bool(missing or conflicting))
+        unsupported = list(check_unsupported(distributions, get_supported()))
+        raise SystemExit(bool(missing or conflicting or unsupported))
     if mode == 'bootstrap':
         sys.argv[1:] = ['install', '--prefix', sys.prefix, '--no-index',
                         '--no-deps', '--upgrade', str(wheel)]
