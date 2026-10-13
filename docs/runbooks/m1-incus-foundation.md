@@ -1,5 +1,12 @@
 # Runbook: M1 Incus storage and network foundation (issue #6)
 
+> Historical implementation/qualification record. Image/profile, Bridge,
+> provisioning, pins and service names below describe the dated experiment,
+> not current deployment or installation. Start with [RESUME](../../RESUME.md)
+> and the [current architecture index](https://github.com/AlterMundi/daimon-matrix/blob/main/docs/current-architecture.md).
+> Preserve this evidence; do not recreate Bridge or bilateral Tribe defaults.
+> Past maintenance consent never authorizes a new global Stop or host restart.
+
 Host: daimonmatrix (Debian 13, kernel 6.12.86+deb13-amd64).
 Executed 2026-08-01 by compaii@daimonmatrix. Reproducible from a clean host
 with the commands below. Pinned package versions in §6.

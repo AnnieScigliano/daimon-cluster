@@ -16,7 +16,12 @@ from pathlib import Path
 CI_FILES = {'.github/workflows/tests.yml', 'README.md', 'tools/ci_scope.py',
             'tests/test_ci_scope.py', 'tests/test_ci_workflow.py'}
 # Closed documentation pages with no generated/runtime consumer. Unknown docs stay full.
-RUNBOOK_DOCS = {'docs/runbooks/tribu-sdk-successor.md', 'docs/design/shared-home-styles.md'}
+RUNBOOK_DOCS = {'docs/runbooks/tribu-sdk-successor.md', 'docs/design/shared-home-styles.md',
+    'README.md', 'RESUME.md', 'docs/PLAN.md', 'docs/design/matrix-convergence.md',
+    'docs/design/onboarding-jobs.md', 'docs/design/provisioning-flow.md',
+    'docs/design/tribe-agent-profile-and-volumes.md', 'docs/runbooks/host-restart-drill.md',
+    'docs/runbooks/image-update-rolling-refresh.md', 'docs/runbooks/m1-incus-foundation.md',
+    'docs/runbooks/release-candidate-freeze.md'}
 CONTEXT_COPY_FILES = {'clusterctl/onboarding_guest.py', 'clusterctl/onboarding_host.py',
                       'tests/test_onboarding_guest.py', 'tests/test_onboarding_host.py'}
 CONTEXT_COPY_TESTS = ('tests/test_onboarding_guest.py', 'tests/test_onboarding_host.py',

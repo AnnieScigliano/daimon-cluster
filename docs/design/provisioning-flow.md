@@ -1,5 +1,12 @@
 # Provisioning flow: governed identity, bridge keys, curated seed (issue #12 design)
 
+> Historical implementation/qualification record. Image/profile, Bridge,
+> provisioning, pins and service names below describe the dated experiment,
+> not current deployment or installation. Start with [RESUME](../../RESUME.md)
+> and the [current architecture index](https://github.com/AlterMundi/daimon-matrix/blob/main/docs/current-architecture.md).
+> Preserve this evidence; do not recreate Bridge or bilateral Tribe defaults.
+> Past maintenance consent never authorizes a new global Stop or host restart.
+
 ### Live-verified image facts (2026-08-01, checked on iso-a)
 
 - `ssh-keygen` IS present in tribe-base (ed25519 generation works).

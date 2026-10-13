@@ -16,8 +16,9 @@ content-addressed commits:
 
 1. Matrix is installed from the full Git pin in `requirements-weave.txt` and
    startup verifies that same `direct_url.json` commit. Operational loading
-   accepts only the final V7 bundle and V3 client configuration; earlier
-   undeployed iterations are removed or synthetic-only.
+   accepts only the qualified bundle/client versions declared by the maintained
+   validator. V7 is historical RC evidence; current hosting also supports V8.
+   Earlier undeployed iterations are removed or synthetic-only.
 2. Recovery/genesis holders use separate stores/processes and a keyless
    threshold aggregator; all-seed ceremonies are named synthetic fixtures.
 3. Shared admission permits distinct authorized embodiments but exactly one

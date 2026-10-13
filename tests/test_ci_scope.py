@@ -423,3 +423,10 @@ def test_shared_style_consumer_guide_alone_skips_runtime_but_code_keeps_home_con
     profile, tests = select([guide, 'clusterctl/homes/assets/home-style.js'], ROOT)
     assert profile == 'homes' and 'tests/test_home_styles.py' in tests
     assert select([guide, 'clusterctl/production_fences.py'], ROOT) == ('full', ['tests'])
+
+
+def test_context_pages_stay_documentation_without_executable_changes():
+    from tools.ci_scope import RUNBOOK_DOCS
+    assert select(sorted(RUNBOOK_DOCS), ROOT) == ('docs', [])
+    assert select([*sorted(RUNBOOK_DOCS), 'clusterctl/onboarding_host.py'], ROOT)[0] != 'docs'
+    assert select([*sorted(RUNBOOK_DOCS), 'unknown-contract.json'], ROOT)[0] == 'full'

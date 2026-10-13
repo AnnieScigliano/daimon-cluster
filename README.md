@@ -3,16 +3,15 @@
 `daimon-cluster` owns bodies, lifecycle, storage and concrete-resource
 fencing for root-authorized Daimon embodiments. It hosts the exact pinned
 `daimon-matrix` runtime; Matrix owns being identity, authority, canonical
-events, `/me`, `/we` and semantic receipts. Tribe Bridge is a transitional
-experiment that is absent from the stable runtime successor: Cluster neither
+events, `/me`, `/we` and semantic receipts. Tribe Bridge is a retired historical
+experiment and absent from the current runtime: Cluster neither
 installs it, creates its keys, opens its broker route nor offers a fallback.
 Matrix's native tribe/relationship governance is a separate semantic feature.
 
-The release candidate assumes no current deployment. All qualification is
-local or runs in disposable, network-disabled containers. Historical host
-inventory and operational receipts remain under `docs/`, but they are not the
-current architecture or evidence for the stable successor. The reviewed RC
-freezer remains only to reproduce the already published three-repository RC.
+Current three-VPS membership-group deployment and exact receiving evidence are
+recorded in [RESUME.md](RESUME.md). Its dated RC evidence remains separate from
+that live state. The reviewed three-repository freezer reproduces historical
+RC qualification only; it does not select a current runtime or require Bridge.
 
 ## Core invariants
 
@@ -35,8 +34,10 @@ freezer remains only to reproduce the already published three-repository RC.
 
 ## Current state
 
-Read [`RESUME.md`](RESUME.md) for exact commits, trees, completed evidence and
-remaining gates. The normative architecture boundary is
+Read [`RESUME.md`](RESUME.md) for current selections and remaining work, and
+[Matrix current architecture/profiles](https://github.com/AlterMundi/daimon-matrix/blob/main/docs/current-architecture.md)
+for the shared navigation index. Dated verification and old provisioning pages
+retain history; they are not present installation instructions. The normative architecture boundary is
 [`docs/design/matrix-convergence.md`](docs/design/matrix-convergence.md); the
 current threat model is
 [`docs/security/threat-model-rc.md`](docs/security/threat-model-rc.md).

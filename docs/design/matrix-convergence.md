@@ -1,10 +1,11 @@
-# Daimon Matrix–Cluster–Tribe convergence contract
+# Matrix and Cluster authority contract
 
 Status: normative cross-repository contract for the V0 hosted runtime.
 
-“Matrix” in this document means our `daimon-matrix` component. Matrix.org is
-not used. Historical references to a similarly named host do not make that
-host an RC target; this contract assumes no existing infrastructure.
+“Matrix” means our `daimon-matrix` component, unrelated to Matrix.org. Use the
+[shared current architecture index](https://github.com/AlterMundi/daimon-matrix/blob/main/docs/current-architecture.md)
+and [RESUME.md](../../RESUME.md) for profiles and actual deployment. Historical
+RC pins below are evidence, not the installed dependency selection.
 
 ## Authority boundaries
 
@@ -14,7 +15,8 @@ host an RC target; this contract assumes no existing infrastructure.
 | Signed `dm.we` history, `/me`, `/we`, `/we.sync`, decisions, projections, relationship/grant authority and canonical communication semantics | `daimon-matrix` |
 | Bodies, incarnation runtime state, lifecycle and portable storage | `daimon-cluster` |
 | Concrete resource exclusion and observed postconditions | `daimon-cluster` |
-| Transitional v1 ordinary human-message transport, deduplication and its own ACK evidence | Tribe Bridge |
+| Native message meaning, membership group and signed semantic receipt | `daimon-matrix` |
+| Physical hosting and observed carrier readiness | `daimon-cluster`; transport ACK is not semantic delivery |
 
 Transport principals do not define a being. Cluster registry rows do not prove
 a being. Receiving an event does not adopt it.
@@ -26,6 +28,13 @@ Cluster pins `daimon-matrix` by full Git commit in
 `direct_url.json` commit and every public schema constant used by the adapter.
 An unpinned wheel, editable checkout, wrong commit or schema downgrade fails
 closed. Cluster does not carry a fallback implementation.
+
+### Historical RC qualification
+
+This paragraph retains the original V7 qualification. Current adapters also
+validate supported V8 bundles; executable requirements and `matrix_host.py`
+select exact current schemas/commit. A stale pin below is not permission to
+downgrade a selected receiver.
 
 The V0 RC functional merge is
 `09414d6edd9586f539be8272c4979d0b36c86b87`; the exact merged installed pin is
@@ -158,18 +167,18 @@ A supported relocation/rebirth sequence is:
 This preserves one being across plural embodiments without copying another
 embodiment's keys. Creating a new body is a new embodiment, not a relocation.
 
-## Tribe Bridge
+## Current membership group and retired Bridge
 
-Tribe Bridge remains a transitional option for ordinary human messages and its
-own authenticated transport/deduplication/ACK evidence. No deployment is
-assumed. It is not the Matrix
-peer wire, does not carry canonical `/we.sync` authority, and its ACK is never
-Matrix recipient intake or a semantic receipt. Matrix DM-051 through DM-055 and
-DM-082 independently own recipient encryption, logical message legs,
-authenticated intake, signed semantic receipts, relationships/grants and the
-native peer carrier. Cluster only hosts the exact Matrix process and provides
-physical observations. Alternative chat-facing carriers may be evaluated
-later; they do not replace this authority split.
+Same-Tribe communication uses Matrix signed membership in one group. Admission
+distributes verified Roots and one shared registration per body, never a mesh
+of founder/member pairs. The three VPS bodies have actual group receipts;
+future portal enrollment remains #227. Explicit directed SDK lanes stay separate.
+
+Tribe Bridge is retired, with no installation, fallback, compatibility or
+operational-state migration requirement. Dated Bridge ACKs remain historical
+transport evidence only. Native Matrix owns encryption, immutable messages,
+authenticated intake and signed semantic receipts; Cluster owns physical
+observations. Neither reception nor a receipt activates a model.
 
 ## Migration and rollback
 

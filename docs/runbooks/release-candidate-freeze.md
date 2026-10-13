@@ -1,5 +1,12 @@
 # Reproducible three-repository release-candidate freeze
 
+> Historical implementation/qualification record. Image/profile, Bridge,
+> provisioning, pins and service names below describe the dated experiment,
+> not current deployment or installation. Start with [RESUME](../../RESUME.md)
+> and the [current architecture index](https://github.com/AlterMundi/daimon-matrix/blob/main/docs/current-architecture.md).
+> Preserve this evidence; do not recreate Bridge or bilateral Tribe defaults.
+> Past maintenance consent never authorizes a new global Stop or host restart.
+
 `tools/build_rc_manifest.py` is the only supported freezer for the integrated
 candidate. It reads three clean, non-shallow repositories, verifies Cluster's
 exact Matrix Git dependency, proves that every qualified head descends from the
