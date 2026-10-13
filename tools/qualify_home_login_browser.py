@@ -26,6 +26,7 @@ from playwright.sync_api import sync_playwright
 @contextmanager
 def gateway(directory):
     app, _ = system.__wrapped__(directory)
+    app.client_example = True
     class DiagnosticHandler(handler(app)):
         def context(self, **kwargs):
             try:return super().context(**kwargs)
@@ -92,10 +93,12 @@ def main():
             assert status['signed_in'] and status['visitor']['name']=='Human'
             # Existing central session hands off to a second home without a
             # second credential ceremony and preserves its URL too.
-            page.goto(one+'/?origin=second#continuity')
-            page.get_by_role('button',name='Sign in',exact=True).click()
-            page.wait_for_url(one+'/?origin=second#continuity')
+            independent=one+'/examples/home-client/?origin=second#continuity'
+            page.goto(independent)
+            with page.expect_navigation(url=independent):
+                page.get_by_role('button',name='Sign in',exact=True).click()
             assert page.evaluate('fetch("/access/status").then(r=>r.json())')['signed_in']
+            page.wait_for_function('document.getElementById("visitor").textContent === "Signed in as Human"')
             page.goto(app.sso.origin+'/')
             assert page.get_by_role('heading',name='Hola, Human').count()==1
             assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
@@ -107,6 +110,7 @@ def main():
                 assert not page.evaluate('fetch("/access/status").then(r=>r.json())')['signed_in']
             assert not errors,errors
             print(json.dumps({'https_passkey_shared_login':'passed','homes':2,
+                'independent_client':'passed',
                 'return_query_fragment':'preserved','global_logout':'passed',
                 'phone_acceptance':False,'google_live_exchange':False}))
             browser.close()

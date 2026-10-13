@@ -145,6 +145,7 @@ def test_new_handoff_does_not_refresh_an_old_passkey_ceremony(login_system):
 
 
 @pytest.mark.parametrize('origin', ['https://', 'http://auth.example.test', 'https://one.example.test',
+                                  'https://one.example.test:8443', 'https://private-one.example.test:8443',
                                   'https://evil.test', 'https://auth.example.test/path'])
 def test_login_origin_is_explicit_separate_and_in_passkey_domain(system, origin):
     app, _ = system

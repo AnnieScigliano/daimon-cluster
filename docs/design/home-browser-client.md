@@ -10,7 +10,7 @@ Load `/access-client.js` on a registered, trusted top-level home page. It expose
 page IDs, template, framework, external script or browser storage is required.
 The default `passkeys.js` is only a page adapter consuming this client.
 
-A client provides `supported()`, `status()`, `catalog()`, `codeURL(localPath)`,
+A client provides `supported()`, `status()`, `catalog()`, `codeURL(localPath)`, `signIn()`,
 `login()`, `register()`, `revoke(credentialId)` and `logout()`. Async operations
 accept `{signal}`; revocation accepts it as its second argument. Login/register
 must originate in a human interaction. They verify through existing server
@@ -20,6 +20,14 @@ busy/error controls and navigates only on success. For direct login use
 After successful enrollment navigate to `/access/keys?registered=1` for the
 current saved-key list. Cancellation permits retry and approved-code recovery.
 `codeURL()` returns that recovery link for the current URL, including its fragment.
+Use `signIn()` for ordinary human sign-in: it queries the current gateway and
+starts shared login when enabled, preserving the path, query and fragment.
+It returns `{status: "redirecting"}` during that navigation; do not reload the
+page in that case. Without shared login it runs the original local ceremony.
+`login()` remains the explicit fresh passkey ceremony for key management or
+independent consumers that deliberately choose it. Shared sign-in remains usable
+in WebViews without WebAuthn, where the trusted login page offers Google or a
+code. `supported()` describes local WebAuthn, not shared-login availability.
 Logout requests JSON, revokes the session and removes its cookie; update the
 page only after success and clear restricted displayed content before refreshing.
 
@@ -27,6 +35,7 @@ page only after success and clear restricted displayed content before refreshing
 signed-in state, public home name, observed dedicated-VPN context and passkey
 availability. It uses the existing context/session evaluator; it contains no
 session credential, actor reference, recipient lists, grants or private catalog.
+`shared_login: true` is added only when the gateway enables this capability.
 `GET /catalog.json` retains its existing authorized projection and contract.
 Every request re-evaluates effective grants; a previously rendered catalog is
 not authorization. History, direct downloads, ranges and isolated previews keep

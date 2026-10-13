@@ -78,3 +78,15 @@ test('shared sign-in remains a navigation route when this WebView cannot use Web
   assert.equal(destination,'/access/sso/start?return=%2Fdifferent%3Fq%3D1%23part');
   assert.equal(f.calls.length,0);
 });
+test('independent client shared sign-in navigates without requiring a local ceremony',async()=>{
+  const f=fixture();let destination;
+  f.ctx.window.PublicKeyCredential=undefined;
+  f.ctx.fetch=async path=>{f.calls.push({path});return {ok:true,json:async()=>({shared_login:true})};};
+  f.ctx.location.assign=value=>{destination=value;};
+  const result=await f.client.signIn();
+  assert.equal(result.status,'redirecting');
+  assert.equal(destination,'/access/sso/start?return=%2Fdifferent%3Fq%3D1%23part');
+  assert.deepEqual(f.calls.map(x=>x.path),['/access/status']);
+  f.ctx.window.top={};await assert.rejects(f.client.signIn(),{name:'NotSupportedError'});
+  assert.equal(f.calls.length,1);
+});

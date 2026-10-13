@@ -24,7 +24,7 @@
     byId("house").textContent = access.home.name;
     document.title = access.home.name + " · Selected work";
     byId("visitor").textContent = access.signed_in ? "Signed in as " + access.visitor.name : access.dedicated_vpn ? "Dedicated VPN" : "Public view";
-    enter.hidden = access.signed_in || !access.passkeys || !client.supported();
+    enter.hidden = access.signed_in || (!access.shared_login && (!access.passkeys || !client.supported()));
     leave.hidden = !access.signed_in;
     byId("recovery").hidden = access.signed_in;
     entries = catalog.entries; list();
@@ -38,7 +38,9 @@
         : "We couldn’t complete that request. Try again or use a code.";
     } finally { button.disabled = false; }
   }
-  enter.addEventListener("click", () => operation(enter, async () => { await client.login(); location.reload(); }));
+  enter.addEventListener("click", () => operation(enter, async () => {
+    const result=await client.signIn();if(result.status!=="redirecting") location.reload();
+  }));
   leave.addEventListener("click", () => operation(leave, async () => {
     await client.logout(); entries = []; byId("works").replaceChildren(); await refresh();
     notice.textContent = "You’re signed out.";

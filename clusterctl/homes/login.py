@@ -19,11 +19,12 @@ class Login:
 
     def __init__(self, app, origin, google=None):
         parsed = urlsplit(origin)
+        occupied = [h[k] for h in app.homes.values() for k in ('public_url','vpn_url')]
+        occupied += [app.config.get(k) for k in ('content_public_url','content_vpn_url')]
         if (parsed.scheme != 'https' or parsed.username or parsed.password or
                 parsed.path or parsed.query or parsed.fragment or
                 not app.passkeys or not parsed.hostname or not parsed.hostname.endswith('.'+app.passkeys.rp_id) or
-                any(origin in (h['public_url'],h['vpn_url']) for h in app.homes.values()) or
-                origin in (app.config.get('content_public_url'),app.config.get('content_vpn_url'))):
+                any(parsed.hostname == urlsplit(value).hostname for value in occupied if value)):
             raise ValueError('invalid_shared_login_origin')
         self.app, self.sessions, self.origin, self.google = app, app.sessions, origin, google
         with closing(self.sessions.connect()) as db:
