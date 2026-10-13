@@ -36,7 +36,9 @@ def test_reading_identity_does_not_authorize_another_persons_design_scope(system
     assert not provider.authorize('unknown','design.update',{'kind':'being','ref':'owner'})
     assert not provider.authorize('human','unrecognized.action',{'kind':'being','ref':'owner'})
     assert provider.authorize('owner','design.read',{'kind':'being','ref':'owner'})
-    assert not provider.authorize('owner','design.update',{'kind':'being','ref':'owner'})
+    assert provider.authorize('owner','design.update',{'kind':'being','ref':'owner'})
+    assert not provider.authorize('owner','design.update',{'kind':'human','ref':'human'})
+    with pytest.raises(ValueError,match='denied'):provider.scope('one',app.authority.actor('owner'),'pair')
 
 
 def test_request_cannot_replace_author_or_private_public_decision(system):
@@ -83,3 +85,36 @@ def test_design_post_requires_current_browser_and_origin_not_null_or_bearer(syst
                 'Host':'one.example.test','Cookie':'__Host-home='+token,**extras})
             response=conn.getresponse();response.read();assert response.status==403
         conn.close()
+
+
+def test_native_style_operation_requires_publisher_credential_and_fixed_namespace(system, tmp_path):
+    app,_=system;provider=receiving(app);app.designs=provider
+    credential=tmp_path/'publisher';credential.write_text('publisher-secret');credential.chmod(0o600)
+    app.homes['one']['owner_token_file']=str(credential)
+    app.sessions.register_owner(home='one',actor='owner',revision='v1',token='publisher-secret')
+    calls=[]
+    class Canonical:
+        def editor_default(self,subject,**fields):
+            calls.append((subject,fields));return {'revision':0}
+        def save_default(self,subject,**fields):
+            calls.append((subject,fields));return {'status':'saved'}
+    provider.authority=Canonical()
+    reader,_=approved(app,actor='owner')
+    for operation in ('style-baseline','style-default'):
+        with pytest.raises(ValueError,match='home_owner_denied'):
+            app.owner('one',reader,operation,{'variant':'template-world'})
+    assert app.owner('one','publisher-secret','style-baseline',{'variant':'template-world'})=={'revision':0}
+    payload={'variant':'template-world','recipe':{'config':{'templateId':'world'}},
+             'expected_design_revision':0,'expected_selection_revision':0,'operation_id':'native',
+             'audience':'public'}
+    assert app.owner('one','publisher-secret','style-default',payload)=={'status':'saved'}
+    assert calls[-1][0]=='owner' and calls[-1][1]['owner']=={'kind':'being','ref':'owner'}
+    assert calls[-1][1]['audience']=='public'
+    for extra in ({'owner':{'kind':'human','ref':'human'}},{'actor':'other'}):
+        with pytest.raises(ValueError,match='invalid_design_save'):
+            app.owner('one','publisher-secret','style-default',{**payload,**extra})
+    with pytest.raises(ValueError,match='explicit_design_audience_required'):
+        app.owner('one','publisher-secret','style-default',{k:v for k,v in payload.items() if k!='audience'})
+    app.authority.people['owner']=replace(app.authority.actor('owner'),revision='changed')
+    with pytest.raises(ValueError,match='home_owner_binding_unavailable'):
+        app.owner('one','publisher-secret','style-default',payload)

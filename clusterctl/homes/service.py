@@ -297,6 +297,16 @@ class Application:
             or not self.sessions.owner(token, home=home, subject=owner)
         ):
             raise ValueError("home_owner_binding_unavailable")
+        if operation in ('style-baseline', 'style-default'):
+            if not self.designs:
+                raise ValueError('homemaker_unavailable')
+            if operation == 'style-baseline':
+                if set(payload) != {'variant'}:
+                    raise ValueError('invalid_design_request')
+                self.designs.variant(payload['variant'])
+                return self.designs.authority.editor_default(owner.ref,
+                    owner={'kind':'being','ref':owner.ref},identifier=payload['variant'])
+            return self.designs.save_native(home, owner, payload)
         if operation == "validate-audience":
             validate_audience(
                 payload,

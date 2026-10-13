@@ -38,7 +38,7 @@ class Homemaker:
                     for ref, home in self.app.homes.items()))
         if action in ('design.read', 'design.preference.read'):
             return owns
-        return owns and current.kind == 'human' and action in (
+        return owns and action in (
             'design.update', 'design.select', 'design.share')
 
     def scope(self, home, subject, context):
@@ -66,6 +66,22 @@ class Homemaker:
 
     def save(self, home, subject, context, payload):
         owner, audience, _ = self.scope(home, subject, context)
+        return self._save(subject, owner, audience, payload)
+
+    def save_native(self, home, subject, payload):
+        """Called only after the gateway verifies its publishing owner credential.
+
+        Being reader cookies cannot use this operation. Its namespace is fixed
+        to that owner; it cannot edit a human or another being's preference.
+        """
+        if subject.kind != 'being' or subject.ref != self.app.homes[home]['owner_being_ref']:
+            raise ValueError('design_operation_denied')
+        if not isinstance(payload, dict) or payload.get('audience') not in ('public', 'private'):
+            raise ValueError('explicit_design_audience_required')
+        return self._save(subject, {'kind':'being','ref':subject.ref}, payload['audience'],
+                          {key:value for key,value in payload.items() if key != 'audience'})
+
+    def _save(self, subject, owner, audience, payload):
         if (not isinstance(payload, dict) or set(payload) != {
                 'variant', 'recipe', 'expected_design_revision', 'expected_selection_revision', 'operation_id'}):
             raise ValueError('invalid_design_save')

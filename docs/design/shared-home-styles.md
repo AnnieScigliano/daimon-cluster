@@ -94,6 +94,14 @@ private personal recipe); requests cannot name an actor or override it. Preferen
 edits do not require a redundant fresh fingerprint. Credential operations keep
 their stronger existing freshness and ancestor-revocation checks.
 
+Native daimons use the existing publishing-owner credential for `style-baseline`
+and `style-default`. The latter requires an explicit public/private audience,
+the source template variant/recipe, both expected revisions and a stable operation
+ID. The verified owner fixes the being namespace; neither operation accepts a
+human or another being as an author. A reader cookie is not a publishing
+credential and cannot call these operations. Both routes use the same canonical
+source component as the paired human's editor, with no second design store.
+
 The read-only appearance consumer can explicitly opt into its verified visitor's
 personal preference; it never accepts an arbitrary human reference from the
 browser. The creator's application uses the stable `homemaker` surface name.
