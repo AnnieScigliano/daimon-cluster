@@ -1,5 +1,12 @@
 # Runbook: host restart drill (closes issue #9's last criterion)
 
+> Historical implementation/qualification record. Image/profile, Bridge,
+> provisioning, pins and service names below describe the dated experiment,
+> not current deployment or installation. Start with [RESUME](../../RESUME.md)
+> and the [current architecture index](https://github.com/AlterMundi/daimon-matrix/blob/main/docs/current-architecture.md).
+> Preserve this evidence; do not recreate Bridge or bilateral Tribe defaults.
+> Past maintenance consent never authorizes a new global Stop or host restart.
+
 Purpose: prove that after a full host restart, daimonmatrix returns to its
 documented state: tribe broker v1, SSH, ZeroTier, incus + containers,
 firewall, zram — with zero manual intervention beyond the restart itself.

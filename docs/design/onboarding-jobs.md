@@ -6,6 +6,12 @@ or a successful preparation never means that the hosted embodiment is active.
 
 ## Current implementation boundary
 
+Use [RESUME.md](../../RESUME.md) and the
+[shared architecture index](https://github.com/AlterMundi/daimon-matrix/blob/main/docs/current-architecture.md)
+for current receiving selections. CompAII, Eko and Oliva have a deployed signed
+Tribe group; automatic future portal-to-group enrollment remains #227. Earlier
+phase-specific preparation receipts below do not replace current readiness.
+
 `clusterctl.onboarding` records an exact host-authorized plan and eight ordered
 steps: environment, context, memory, Matrix, access, Telegram, welcome and
 acceptance. Web progress reads the same job's closed projection through
@@ -104,9 +110,11 @@ exceptions. No bootstrap or re-embedding runs. A later receiving write is not
 replaced by a retry. Interrupted snapshot publication reconciles its known
 hard link; an unpublished snapshot is never mistaken for a complete backup.
 
-Matrix, access, Telegram and acceptance adapters are still being integrated
-and currently return explicit waiting states. This is a foundation for complete onboarding, not a deployed end-to-end
-activation claim. Real cohort activation and human acceptance remain pending.
+The maintained Matrix, access, Telegram and acceptance adapters now report each
+actual receiving stage. Missing prerequisites return explicit waiting states.
+The current three-VPS deployment is recorded in RESUME; that evidence does not
+complete future portal group enrollment or every future human acceptance.
+Custody preparation alone cannot establish runtime or enrollment readiness.
 
 The Matrix stage now dispatches native first-genesis preparation when the pair
 selected its first signed identity and a separate exact custody grant exists.
@@ -134,7 +142,7 @@ Existing identity selections never run this first-genesis ceremony. Native
 target preparation, current V8 authority, physical admission and canonical
 registry projection remain required before a hosted Matrix body can pass
 acceptance. Disposable native backup/restore evidence is not live consumer
-denial or independent human recovery evidence. The enrollment flag stays false.
+denial or independent human recovery evidence. That custody receipt alone never makes the enrollment flag true.
 
 The Root-side target authorizer receives only the native public enrollment
 request. It checks the body reference against the exact hosted plan and persists

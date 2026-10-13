@@ -1,4 +1,8 @@
-# Daimon V0 release-candidate checkpoint
+# Current deployment and historical qualification
+
+Architecture/profile navigation is
+[Matrix current architecture](https://github.com/AlterMundi/daimon-matrix/blob/main/docs/current-architecture.md).
+Current selections below supersede the explicitly historical qualification.
 
 ## Current communication target — 2026-10-13
 
@@ -21,9 +25,19 @@ three-VPS delivery now has retained recipient-intake ACKs, signed receipts and
 one confirmed Tribu speech (message795). Exact retry retains the same message
 and audience. History and compatible predecessor software remain intact.
 
-Last reconciled: 2026-10-07.
+Current SDK/contract pin: `a1a70b6420692d19f85ad0edb945cba00c3f5459`, published
+by Cluster PR #228. Receiving generations preserve the original seed, context
+and old SDK. The live code successor was selected without human-service restart.
+Future portal admission into the existing group remains #227; Source I/O
+recovery remains Matrix #310 / Telecodex PR #85. No new automatic peer attention
+is selected. Current evidence reconciled 2026-10-13.
 
-## Onboarding SDK successor
+## Historical qualification checkpoint — 2026-10-07
+
+The following candidates, gates and pins retain their original dates. They do
+not override current selections or describe an unperformed current rollout.
+
+### Historical onboarding SDK candidate
 
 The onboarding candidate advances the executable Matrix pin to
 `ca1570aae24cadd2b9fee42bee65be5a4c06e664`. The deployed onboarding services

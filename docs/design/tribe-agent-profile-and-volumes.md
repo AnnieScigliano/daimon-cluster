@@ -1,5 +1,12 @@
 # tribe-agent profile and durable volume layout (issue #8)
 
+> Historical implementation/qualification record. Image/profile, Bridge,
+> provisioning, pins and service names below describe the dated experiment,
+> not current deployment or installation. Start with [RESUME](../../RESUME.md)
+> and the [current architecture index](https://github.com/AlterMundi/daimon-matrix/blob/main/docs/current-architecture.md).
+> Preserve this evidence; do not recreate Bridge or bilateral Tribe defaults.
+> Past maintenance consent never authorizes a new global Stop or host restart.
+
 Status: IMPLEMENTED on daimonmatrix (2026-08-01). Profile source:
 `configs/tribe-agent-profile.yaml` (applied via `incus profile edit`).
 
