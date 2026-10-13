@@ -56,6 +56,8 @@ class GuestIncus(host_fixtures.IncusFixture):
             self.guest_calls.append(argv)
             if 'bootstrap_home' in ' '.join(argv):
                 return ''
+            if 'reconcile_context_copy' in ' '.join(argv):
+                return json.dumps({'recovered': 0})
             stage = argv[argv.index('--home') - 1]
             action = argv[argv.index('--home') - 2]
             if action == 'execute':
