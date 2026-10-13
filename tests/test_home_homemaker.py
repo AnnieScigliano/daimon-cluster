@@ -98,9 +98,15 @@ def test_native_style_operation_requires_publisher_credential_and_fixed_namespac
             calls.append((subject,fields));return {'revision':0}
         def save_default(self,subject,**fields):
             calls.append((subject,fields));return {'status':'saved'}
+        def read_selection(self,subject,**fields):
+            calls.append((subject,fields));return {'mode':'default','revision':0}
+        def select(self,subject,**fields):
+            calls.append((subject,fields));return {'mode':'default','revision':1}
+        def read_recipe(self,subject,ref,revision):
+            calls.append((subject,{'ref':ref,'revision':revision}));return None
     provider.authority=Canonical()
     reader,_=approved(app,actor='owner')
-    for operation in ('style-baseline','style-default'):
+    for operation in ('style-baseline','style-default','style-selection','style-select','style-recipe'):
         with pytest.raises(ValueError,match='home_owner_denied'):
             app.owner('one',reader,operation,{'variant':'template-world'})
     assert app.owner('one','publisher-secret','style-baseline',{'variant':'template-world'})=={'revision':0}
@@ -110,6 +116,17 @@ def test_native_style_operation_requires_publisher_credential_and_fixed_namespac
     assert app.owner('one','publisher-secret','style-default',payload)=={'status':'saved'}
     assert calls[-1][0]=='owner' and calls[-1][1]['owner']=={'kind':'being','ref':'owner'}
     assert calls[-1][1]['audience']=='public'
+    assert app.owner('one','publisher-secret','style-selection',{'surface':'home'})=={'mode':'default','revision':0}
+    assert calls[-1][1]['scope']=={'kind':'being','ref':'owner'}
+    selection={'surface':'homemaker','selection':{'mode':'default'},'expected_revision':0,'operation_id':'select'}
+    assert app.owner('one','publisher-secret','style-select',selection)['revision']==1
+    for extra in ({'scope':{'kind':'human','ref':'human'}},{'actor':'other'}):
+        with pytest.raises(ValueError,match='invalid_design_selection'):
+            app.owner('one','publisher-secret','style-select',{**selection,**extra})
+    with pytest.raises(ValueError,match='unregistered_design_surface'):
+        app.owner('one','publisher-secret','style-selection',{'surface':'another-home'})
+    with pytest.raises(ValueError,match='design_recipe_unavailable'):
+        app.owner('one','publisher-secret','style-recipe',{'design_ref':'private-other'})
     for extra in ({'owner':{'kind':'human','ref':'human'}},{'actor':'other'}):
         with pytest.raises(ValueError,match='invalid_design_save'):
             app.owner('one','publisher-secret','style-default',{**payload,**extra})

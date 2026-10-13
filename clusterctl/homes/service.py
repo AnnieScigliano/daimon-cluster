@@ -297,7 +297,7 @@ class Application:
             or not self.sessions.owner(token, home=home, subject=owner)
         ):
             raise ValueError("home_owner_binding_unavailable")
-        if operation in ('style-baseline', 'style-default'):
+        if operation in ('style-baseline', 'style-default', 'style-selection', 'style-select', 'style-recipe'):
             if not self.designs:
                 raise ValueError('homemaker_unavailable')
             if operation == 'style-baseline':
@@ -306,6 +306,10 @@ class Application:
                 self.designs.variant(payload['variant'])
                 return self.designs.authority.editor_default(owner.ref,
                     owner={'kind':'being','ref':owner.ref},identifier=payload['variant'])
+            if operation in ('style-selection','style-select'):
+                return self.designs.selection_native(home,owner,payload,write=operation=='style-select')
+            if operation == 'style-recipe':
+                return self.designs.recipe_native(owner,payload)
             return self.designs.save_native(home, owner, payload)
         if operation == "validate-audience":
             validate_audience(
@@ -1069,9 +1073,14 @@ def handler(app, *, owner=False):
                     payload = json.loads(data)
                     if not isinstance(payload, dict):
                         raise ValueError("invalid_owner_payload")
-                    self.respond(
-                        200, app.owner(unquote(parts[2]), token[7:], parts[3], payload)
-                    )
+                    try:
+                        result=app.owner(unquote(parts[2]), token[7:], parts[3], payload)
+                    except ValueError as error:
+                        if parts[3].startswith('style-') and str(error) in (
+                                'design_revision_conflict','design_selection_conflict','design_operation_conflict'):
+                            self.respond(409,{'error':str(error)});return
+                        raise
+                    self.respond(200,result)
                     return
                 if app.sso:
                     from .login import routes
