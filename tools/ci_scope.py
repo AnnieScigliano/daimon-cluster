@@ -217,6 +217,14 @@ SDK_BOOTSTRAP_TESTS = ('tests/test_onboarding_sdk.py', 'tests/test_onboarding_co
                        'tests/test_ci_workflow.py')
 
 
+UPDATE_INTENT_FILES = {'clusterctl/onboarding_code_successor.py',
+                       'tests/test_receiving_update_journal.py',
+                       'docs/runbooks/tribu-sdk-successor.md'}
+UPDATE_INTENT_TESTS = ('tests/test_receiving_update_journal.py', 'tests/test_operation_journal.py',
+                       'tests/test_onboarding_code_successor.py', 'tests/test_onboarding_sdk.py',
+                       'tests/test_ci_scope.py', 'tests/test_ci_workflow.py')
+
+
 GROUP_FILES = {'tests/test_onboarding_group.py',
     'clusterctl/onboarding_acceptance.py', 'clusterctl/onboarding_target.py',
     'clusterctl/onboarding_host.py',
@@ -300,6 +308,12 @@ def select(changed: list[str], root: Path) -> tuple[str, list[str]]:
         # Offline bootstrap and immutable SDK generations only. Native authority,
         # admission, dependency pins and host mutations retain their broader scope.
         return 'sdk-bootstrap', list(SDK_BOOTSTRAP_TESTS)
+    if ('tests/test_receiving_update_journal.py' in changed
+            and set(changed) <= UPDATE_INTENT_FILES | CI_FILES
+            and all((root / path).is_file() for path in UPDATE_INTENT_TESTS)):
+        # Exact durable intent and retained-generation verification. Host/native
+        # effect adapters, dependency pins and authority changes stay broader.
+        return 'update-intent', list(UPDATE_INTENT_TESTS)
     observation_tests = ('tests/test_onboarding_target.py', 'tests/test_onboarding_managed.py',
         'tests/test_onboarding_owner_client.py', 'tests/test_onboarding_code_successor.py',
         'tests/test_ci_scope.py', 'tests/test_ci_workflow.py')

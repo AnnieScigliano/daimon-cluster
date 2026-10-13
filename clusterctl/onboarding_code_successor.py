@@ -21,6 +21,52 @@ TELEGRAM_SCHEMA = 'cluster-onboarding-runtime-successor/v3'
 MARKER = 'runtime-successor.json'
 
 
+def plan_update(journal, *, manifest_digest: str, target: str,
+                expected_precondition: dict, intended_transition: dict,
+                audit_identity: dict) -> dict:
+    """Freeze receiving update vectors in the maintained operation journal.
+
+    The owning controller supplies its already qualified, approved manifest and
+    resolved selection vectors. This records intent only: no selection, authority
+    acceptance, receiver load, egress enablement or service operation occurs.
+    Apply/resume must consume the returned retained vectors under actual locks.
+    """
+    from .operation_journal import INTENT_SCHEMA, JournalConflict
+    if (not isinstance(manifest_digest, str) or not re.fullmatch(r'[0-9a-f]{64}', manifest_digest)
+            or not isinstance(target, str) or not re.fullmatch(r'[A-Za-z0-9:._/-]{1,240}', target)
+            or not isinstance(expected_precondition, dict) or not isinstance(intended_transition, dict)
+            or not isinstance(audit_identity, dict)):
+        raise OnboardingError('invalid_receiving_update_intent')
+    operation = 'receiving-update'
+    # OperationJournal hashes intent, not its separate vector arguments. Bind
+    # both vectors here so an exact operation cannot acquire fresh state bytes.
+    intent = dict(operation=operation, target=target, runtime_call=dict(
+        manifest_digest=manifest_digest, precondition_digest=digest(expected_precondition),
+        transition_digest=digest(intended_transition)))
+    key = operation + ':' + target + ':' + manifest_digest
+    retained = journal.latest_for_idempotency_key(key)
+    if retained is None:
+        try:
+            retained = journal.plan(operation=operation, target=target, idempotency_key=key,
+                intent=intent, expected_precondition=expected_precondition,
+                intended_transition=intended_transition, audit_identity=audit_identity)
+        except JournalConflict:
+            # Another caller can complete this exact operation after our lookup.
+            # Inspect its retained row once; the full validation below still
+            # rejects different vectors and operations needing explicit repair.
+            retained = journal.latest_for_idempotency_key(key)
+            if retained is None:
+                raise
+    if (retained['operation'] != operation or retained['target'] != target
+            or retained['intent'] != {'schema': INTENT_SCHEMA, **intent}
+            or retained['expected_precondition'] != expected_precondition
+            or retained['intended_transition'] != intended_transition):
+        raise JournalConflict('receiving update is bound to different exact selection vectors')
+    if retained['state'] in {'degraded', 'compensated'}:
+        raise JournalConflict('receiving update requires explicit repair or a new authorized operation')
+    return retained
+
+
 def verify(code: Path, fingerprint: str, base: Path, base_fingerprint: str, *, uid: int) -> dict:
     original = onboarding_release.verify(base, base_fingerprint, uid=uid)
     successor = onboarding_release.verify(code, fingerprint, uid=uid)

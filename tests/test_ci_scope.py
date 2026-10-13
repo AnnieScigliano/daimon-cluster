@@ -17,6 +17,17 @@ def test_sdk_bootstrap_keeps_exact_install_and_successor_contracts(tmp_path):
         assert select([*changed, other], ROOT)[0] != 'sdk-bootstrap'
 
 
+def test_receiving_update_intent_keeps_durable_journal_and_successor_contracts(tmp_path):
+    from tools.ci_scope import UPDATE_INTENT_FILES, UPDATE_INTENT_TESTS
+    changed = sorted(UPDATE_INTENT_FILES | {'tools/ci_scope.py', 'tests/test_ci_scope.py'})
+    assert select(changed, ROOT) == ('update-intent', list(UPDATE_INTENT_TESTS))
+    assert select(changed, tmp_path) == ('full', ['tests'])
+    for other in ('clusterctl/operation_journal.py', 'clusterctl/onboarding_host.py',
+                  'clusterctl/onboarding_runtime.py', 'clusterctl/onboarding_custody.py',
+                  'requirements-weave.txt', 'unknown.py'):
+        assert select([*changed, other], ROOT)[0] != 'update-intent'
+
+
 def test_scope_uses_only_the_verified_pr_merge_parent(monkeypatch):
     import subprocess
     from tools.ci_scope import scope_base
