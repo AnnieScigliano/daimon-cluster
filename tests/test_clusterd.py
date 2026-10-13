@@ -438,7 +438,7 @@ def test_ontology_read_routes(server):
     assert weave["configured"] is False
     assert weave["implementation"] == "installed-daimon-matrix"
     from pathlib import Path
-    requirement = (Path(__file__).resolve().parents[1] / "requirements-weave.txt").read_text().strip()
+    requirement = next(line for line in (Path(__file__).resolve().parents[1] / "requirements-weave.txt").read_text().splitlines() if line.startswith("daimon-matrix @ "))
     assert weave["matrix_contract_commit"] == requirement.rsplit("@", 1)[1]
     assert weave["embodiments"][0]["matrix_process"]["state"] == \
         "not-configured"
