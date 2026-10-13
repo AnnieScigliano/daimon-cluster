@@ -200,7 +200,8 @@ class Backend:
 
 
 class Application:
-    def __init__(self, config, authority, sessions, *, backends=None, passkey_rp_id=None):
+    def __init__(self, config, authority, sessions, *, backends=None, passkey_rp_id=None, client_example=False):
+        self.client_example = client_example
         self.config, self.homes, self.authority, self.sessions = (
             config,
             config["homes"],
@@ -422,7 +423,7 @@ def auth_controls(subject, vpn, passkeys, return_path='/'):
         return ('<button id="passkey-action" type="button" data-mode="login" '
                 'data-reload="true">Sign in</button><a data-code-login href="' +
                 html.escape(code_url, quote=True) + '">Use a code</a>',
-                '<script src="/passkeys.js" defer></script>')
+                '<script src="/access-client.js" defer></script><script src="/passkeys.js" defer></script>')
     return '<a href="' + html.escape(code_url, quote=True) + '">Sign in</a>', ''
 
 
@@ -556,7 +557,7 @@ def key_page(app, subject=None, *, registered=False):
         heading, copy, button = 'Welcome back', 'Use a saved passkey to sign in with your phone.', 'Sign in with a passkey'
         extra = ''
     notice = 'Access key saved. You can now sign out and sign in with a passkey.' if registered and subject else ''
-    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/home.css"><script src="/passkeys.js" defer></script><title>Access keys · Daimon Matrix</title></head><body><main><a href="/">← Home</a><h1>{heading}</h1><p>{copy}</p><button type="button" id="passkey-action" data-mode="{mode}">{button}</button><p id="passkey-status" role="status" aria-live="polite">{notice}</p>{extra}<p><a href="/access">Use an approved code instead</a></p><p>Keep this recovery route if you lose your phone. Biometrics stay on your device.</p></main></body></html>'''.encode()
+    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/home.css"><script src="/access-client.js" defer></script><script src="/passkeys.js" defer></script><title>Access keys · Daimon Matrix</title></head><body><main><a href="/">← Home</a><h1>{heading}</h1><p>{copy}</p><button type="button" id="passkey-action" data-mode="{mode}">{button}</button><p id="passkey-status" role="status" aria-live="polite">{notice}</p>{extra}<p><a href="/access">Use an approved code instead</a></p><p>Keep this recovery route if you lose your phone. Biometrics stay on your device.</p></main></body></html>'''.encode()
 
 
 def handler(app, *, owner=False):
@@ -678,6 +679,27 @@ def handler(app, *, owner=False):
                         ),
                         "text/html; charset=utf-8",
                     )
+                elif path == "/access/status":
+                    self.respond(200, {
+                        "contract": "dm.home-browser/v1",
+                        "home": {"name": app.homes[home]["name"]},
+                        "signed_in": bool(subject),
+                        "visitor": {"name": subject.name, "kind": subject.kind} if subject else None,
+                        "dedicated_vpn": vpn,
+                        "passkeys": bool(app.passkeys) and not vpn,
+                    })
+                elif path == "/access-client.js":
+                    self.respond(200, (Path(__file__).parent / "assets" / "access-client.js").read_bytes(),
+                                 "text/javascript; charset=utf-8")
+                elif app.client_example and path in (
+                    "/examples/home-client/", "/home-client-example.js", "/home-client-example.css"
+                ):
+                    asset, kind = {
+                        "/examples/home-client/": ("index.html", "text/html; charset=utf-8"),
+                        "/home-client-example.js": ("client.js", "text/javascript; charset=utf-8"),
+                        "/home-client-example.css": ("style.css", "text/css; charset=utf-8"),
+                    }[path]
+                    self.respond(200, (Path(__file__).parent / "examples" / "library" / asset).read_bytes(), kind)
                 elif path == "/catalog.json":
                     self.respond(
                         200,
@@ -1081,6 +1103,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
     parser.add_argument("--passkey-rp-id", help="Enable shared passkeys for exact configured public home origins")
+    parser.add_argument("--client-example", action="store_true", help="Serve the optional independently authored library client")
     args = parser.parse_args()
     from daimon_matrix.messaging_config import protected_read
 
@@ -1094,7 +1117,7 @@ def main():
         authority_source=Path(config["authority_source"]),
         human_rosters=registry.rosters,
     )
-    app = Application(config, authority, sessions, passkey_rp_id=args.passkey_rp_id)
+    app = Application(config, authority, sessions, passkey_rp_id=args.passkey_rp_id, client_example=args.client_example)
     servers = [
         ThreadingHTTPServer(("127.0.0.1", config[key]), handler(app, owner=owner))
         for key, owner in (("viewer_port", False), ("owner_port", True))
