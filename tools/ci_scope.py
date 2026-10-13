@@ -207,11 +207,13 @@ SDK_TESTS = tuple(sorted(set(ONBOARDING_CONTRACTS) | {
 
 GROUP_FILES = {'tests/test_onboarding_group.py',
     'clusterctl/onboarding_acceptance.py', 'clusterctl/onboarding_target.py',
+    'clusterctl/onboarding_host.py',
     'clusterctl/onboarding_peer_host.py', 'clusterctl/onboarding_source.py',
     'clusterctl/onboarding_runtime.py', 'tools/managed_peer_plan.py',
     'tests/test_onboarding_peer_host.py', 'AGENTS.md', 'RESUME.md',
     'docs/design/onboarding-jobs.md'} | SDK_FILES
 GROUP_TESTS = ('tests/test_onboarding_group.py', 'tests/test_onboarding_acceptance.py',
+    'tests/test_onboarding_host.py',
     'tests/test_onboarding_sdk.py', 'tests/test_onboarding_code_successor.py',
     'tests/test_onboarding_source.py', 'tests/test_onboarding_peer_host.py',
     'tests/test_onboarding_owner_client.py', 'tests/test_onboarding_runtime.py',
