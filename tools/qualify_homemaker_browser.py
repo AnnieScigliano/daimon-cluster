@@ -52,9 +52,12 @@ def main():
             editor.on('pageerror',lambda error:errors.append(str(error)))
             response=editor.goto(origin+'/homemaker/')
             assert 'https://telegram.org' not in response.headers['content-security-policy']
+            assert editor.evaluate('document.documentElement.dataset.stylePolicy')=='authored'
+            editor_background=editor.evaluate('getComputedStyle(document.body).backgroundColor')
             editor.locator('[data-choose=tricorder]').click()
             editor.locator('[data-use-shared-default]').click()
             editor.locator('[data-shared-default-status]').filter(has_text='predeterminado guardado').wait_for()
+            assert editor.evaluate('getComputedStyle(document.body).backgroundColor')==editor_background
             home=context.new_page();home.goto(origin+'/')
             home.wait_for_function('getComputedStyle(document.documentElement).getPropertyValue("--dm-background").trim() !== ""')
             initial=home.evaluate('fetch("/style.json?surface=home").then(r=>r.json())')
@@ -69,10 +72,9 @@ def main():
             wait(mini, '()=>window.Telegram?.WebApp?.platform === "android" && window.nativeEvents.some(e=>e.name==="web_app_ready")')
             mini.evaluate('Telegram.WebView.receiveEvent("safe_area_changed",{top:12,bottom:16,left:0,right:0})')
             wait(mini, '()=>document.documentElement.style.getPropertyValue("--telegram-safe-top") === "12px"')
-            wait(mini, '()=>getComputedStyle(document.documentElement).getPropertyValue("--dm-background").trim() !== ""')
-            assert mini.evaluate('getComputedStyle(document.body).backgroundColor')==home.evaluate('getComputedStyle(document.body).backgroundColor')
-            wait(mini, '(background)=>window.nativeEvents.some(e=>e.name==="web_app_set_header_color" && JSON.parse(e.data).color?.toLowerCase()===background.toLowerCase())',
-                                   arg=initial['appearance']['background'])
+            assert mini.evaluate('document.documentElement.dataset.stylePolicy')=='authored'
+            mini_background=mini.evaluate('getComputedStyle(document.body).backgroundColor')
+            wait(mini, '()=>window.nativeEvents.some(e=>e.name==="web_app_set_header_color")')
             assert mini.locator('[data-compact-nav]').is_visible()
             assert mini.evaluate('document.documentElement.scrollWidth <= innerWidth')
             mini.screenshot(path=str(out/'miniapp-default-390.png'))
@@ -87,8 +89,8 @@ def main():
             home.wait_for_function('(old)=>getComputedStyle(document.documentElement).getPropertyValue("--dm-background").trim() !== old',
                                    arg=initial['appearance']['background'])
             mini.evaluate('window.dispatchEvent(new CustomEvent("home-style:refresh"))')
-            wait(mini, '(old)=>getComputedStyle(document.documentElement).getPropertyValue("--dm-background").trim() === old',
-                                   arg=initial['appearance']['background'])
+            assert mini.evaluate('getComputedStyle(document.body).backgroundColor')==mini_background
+            assert editor.evaluate('getComputedStyle(document.body).backgroundColor')==editor_background
             changed=home.evaluate('fetch("/style.json?surface=home").then(r=>r.json())')
             assert initial['design_ref']!=changed['design_ref']
             assert mini.evaluate('fetch("/style.json?surface=homemaker").then(r=>r.json())')['mode']=='explicit'
@@ -100,7 +102,8 @@ def main():
             assert not errors,errors
             result={'fixture':'HTTPS gateway + maintained Homemaker source + canonical authority',
                     'authenticated_writer':'existing verified human session and current pair',
-                    'home_and_miniapp':'same canonical style and real font assets',
+                    'home':'canonical style and real font assets',
+                    'editor_and_miniapp':'source-authored shell preserved across default changes',
                     'default_switch':'new variant reference','explicit_application':'preserved',
                     '503_fallback':'last valid readable presentation','phone_acceptance':False,
                     'telegram_sdk':'official SDK loaded under receiving CSP; simulated Android ready/safe-area bridge',

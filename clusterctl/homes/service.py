@@ -727,7 +727,7 @@ def handler(app, *, owner=False):
                         ),
                         "text/html; charset=utf-8",
                     )
-                elif path in ("/home-style.js", "/artifact-style.js"):
+                elif path in ("/home-style.js", "/artifact-style.js", "/home-miniapp-login.js"):
                     self.respond(200, (Path(__file__).parent / "assets" / path[1:]).read_bytes(), "text/javascript; charset=utf-8")
                 elif path == "/style.json":
                     if not app.styles:

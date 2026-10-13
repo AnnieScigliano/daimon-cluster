@@ -1,7 +1,14 @@
 /* Foreground appearance reconciliation. Style data never authorizes access. */
 "use strict";
 (() => {
-  if(document.documentElement.dataset?.styleSelection==='explicit')return;
+  const policy=document.documentElement.dataset?.stylePolicy;
+  const authored=policy!==undefined?policy!=='inherit':document.documentElement.dataset?.styleSelection==='explicit';
+  const channel=typeof BroadcastChannel==='function'?new BroadcastChannel('dm.home-style/v1'):null;
+  if(authored){
+    // An editor can notify other consumers while retaining its own interface.
+    window.addEventListener('home-style:refresh',()=>channel?.postMessage('changed'));
+    return;
+  }
   const names={background:['--space','--home-background','--dm-background'],surface:['--panel','--panel2','--home-surface','--dm-surface'],text:['--ink','--muted','--home-text','--dm-text'],accent:['--cyan','--amber','--mauve','--line','--home-accent','--dm-accent'],bodyFont:['--home-font','--dm-body-font'],headingFont:['--home-heading-font','--dm-heading-font'],radius:['--home-radius','--dm-radius'],gap:['--home-gap','--dm-gap']};
   let current=null, request=null, timer;
   const match=location.pathname.match(/^\/view\/([a-f0-9]{32})$/);
@@ -41,7 +48,6 @@
     refresh();
     timer=setTimeout(foreground,15000);
   }
-  const channel=typeof BroadcastChannel==='function'?new BroadcastChannel('dm.home-style/v1'):null;
   if(channel)channel.addEventListener('message',()=>refresh());
   window.addEventListener('pageshow',foreground);
   window.addEventListener('pagehide',()=>{clearTimeout(timer);abortRequest();});

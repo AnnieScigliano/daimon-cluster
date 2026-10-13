@@ -200,12 +200,15 @@ def routes(handler, app, method, data=b''):
         raise ValueError('invalid_homemaker_query')
     context = query.get('scope', ['pair'])[0]
     if method == 'GET' and path in ('/homemaker/', '/homemaker/miniapp.html') and not subject:
+        miniapp = path.endswith('miniapp.html')
+        presentation = ('<script src="https://telegram.org/js/telegram-web-app.js"></script>'
+                        '<script src="/home-miniapp-login.js" defer></script>') if miniapp else ''
         auth, script = auth_controls(None, False, bool(app.passkeys), handler.path, bool(app.sso))
         body = ('<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-                '<link rel="stylesheet" href="/home.css"><title>Tu taller · Homemaker</title>'+script+
+                '<link rel="stylesheet" href="/home.css"><title>Tu taller · Homemaker</title>'+presentation+script+
                 '<main><h1>Tu taller de estilos</h1><p>Entrá con tu identidad habitual para elegir el estilo de tus espacios.</p>'+
                 auth+'<p id="passkey-status" role="status" aria-live="polite"></p></main></html>')
-        handler.respond(200, body.encode(), 'text/html; charset=utf-8');return True
+        handler.respond(200, body.encode(), 'text/html; charset=utf-8', telegram_sdk=miniapp);return True
     if path == '/homemaker/api/context' and method == 'GET':
         _, audience, label = provider.scope(home, subject, context)
         handler.respond(200, {'audience': audience, 'label': label});return True

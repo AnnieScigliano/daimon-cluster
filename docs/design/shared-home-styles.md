@@ -54,6 +54,24 @@ credentials, actor references or an editable preference store. Unsafe CSS,
 network URLs, sibling messages and null-origin senders cannot change styles.
 Explicitly authored work may opt out through its own style declaration.
 
+## Source-owned surface policy
+
+Each page declares its policy at its owning HTML root, not through a host-wide
+exception list: `data-style-policy="inherit"` (also the default when omitted)
+follows the resolved shared selection; `data-style-policy="authored"` keeps the
+surface's own CSS. Unknown explicit policy values retain the authored fallback.
+The earlier `data-style-selection="explicit"` opt-out remains compatible when
+the new policy is absent. This differs from a canonical explicit design reference
+or pin, which still receives resolved appearance through an inheriting consumer.
+
+Homemaker's own template declares authored: desktop, compact and Telegram editor
+shells retain their interface while previews and selected spaces change. No
+gateway hostname checks, copied palette, preference mutation or second exception
+database is involved. An authored editor may broadcast explicit save invalidation
+to other default consumers without fetching/applying that default itself. The
+same declaration is respected by the trusted-page and isolated-artifact consumers.
+It controls presentation only and grants no resource or identity authority.
+
 The current consumer candidate refreshes on opening/resuming and at most once
 per15seconds while visible; same-origin invalidation can refresh immediately.
 Requests have a10second fetch/body deadline. Hidden/closed pages cancel their timer, abort in-flight requests and discard late responses. This is browser presentation traffic,
