@@ -597,10 +597,36 @@ Context, memory, provider and Telegram stages continue to use the original code.
 Absent both fields, the existing launch path is unchanged; partial selection is
 refused. This mechanism alone establishes no peer relationship or live acceptance.
 
-### Retained Source service and per-being peer admission
+### Membership group selection
 
-The optional owner-selected `peer` configuration makes Matrix reconciliation
-perform the maintained encrypted two-party ceremony before managed admission.
+Same-Tribe enrollment uses one signed membership group. Invite and accept in the
+existing Tribe through Matrix's authenticated relationship operations; configure
+one signed group application and shared route roster, not grants or proxies per
+pair. `PeerHost.execute` accepts only the exact receiving group application and
+visibility paths after signature-checked target observation. Missing enrollment
+reports `onboarding_group_enrollment_required`; it cannot silently declare
+another founder/member Tribe or count a historical pair as group completion.
+
+Managed admission retains the native controller, custody, receiving context,
+history and owner session bindings. Its actual dependency/code selections must
+match the group's installed generation. Readiness and technical delivery use
+`tribe` channels and signed semantic receipt legs for the requested being;
+unavailable sibling bodies remain explicit and never imply model reading.
+The three current VPS bodies are deployed and demonstrated. A new portal member
+still requires a qualified group enrollment/roster transaction before the worker
+can reconcile it; this guard is not a claim of automatic future enrollment.
+
+### Historical directed repair and retained Source service
+
+The following two-party ceremony is retained for explicit legacy recovery through
+`PeerHost.repair_directed`, never automatic Tribe onboarding. The Source offer
+operator refuses it when a group is selected. Ordinary deliberate directed
+conversation remains a distinct SDK lane and is not reinterpreted as a group.
+
+
+
+The legacy owner-selected `peer` configuration supplies the retained encrypted
+two-party recovery ceremony. It is not executed by the current worker default.
 The Source operation runs as its existing owner, acquires its real writer lock,
 and uses the existing signed native Telegram installation. The worker stops and
 restarts that one user service around the finite ceremony; it never reads an

@@ -115,13 +115,14 @@ def test_host_retry_reuses_signed_response_and_retains_native_source(journey, tm
     monkeypatch.setattr(host, '_source', call)
     try:
         with pytest.raises(OSError, match='lost source finish'):
-            host.execute(plan)
+            host.repair_directed(plan)
         assert state and source._load(signed=True).egress is not None
-        host.execute(plan)
+        host.repair_directed(plan)
         assert host.application(plan) == (str('/home/agent/.local/state/daimon-onboarding/' + plan['name'] + '/matrix/peer/application'),
             '/home/agent/.local/state/daimon-onboarding/' + plan['name'] + '/matrix/peer/visibility/installation.json')
         before = json.loads((root / fingerprint / 'response.json').read_bytes())
-        host.execute(plan)
+        with pytest.raises(OnboardingError, match='onboarding_group_enrollment_required'):
+            host.execute(plan)
         assert accepted == ['peer-accept']
         assert json.loads((root / fingerprint / 'response.json').read_bytes()) == before
         assert calls.count('stop') == calls.count('start') == 2
@@ -169,6 +170,8 @@ def test_revocation_between_peer_effects_restores_source_without_finishing(tmp_p
     services, effects = [], []
     host._service = services.append
     def source(action, value):
+        if action == 'observe':
+            return {'running': True, 'applications': []}
         effects.append(action)
         assert action == 'offer'
         return {'sender_identity': {}}
@@ -176,7 +179,7 @@ def test_revocation_between_peer_effects_restores_source_without_finishing(tmp_p
     monkeypatch.setattr(onboarding_peer, 'native', lambda *a: SimpleNamespace(
         verify_identity=lambda v: SimpleNamespace(state=SimpleNamespace(being_ref='approved-source'))))
     with pytest.raises(OnboardingError, match='host_authorization_required'):
-        host.execute(plan())
+        host.repair_directed(plan())
     assert effects == ['offer'] and services == ['stop', 'start']
 
 

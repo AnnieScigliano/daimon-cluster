@@ -117,7 +117,7 @@ if payload['install']:
   exec(compile(chat['installer'],'<qualified-agent-chat-installer>','exec'),installer.__dict__)
   installer.install(argparse.Namespace(attachment=Path(chat['attachment']),socket=Path(chat['socket']),
    client_config=Path(chat['application'])/'client.json',client_key=Path(chat['application'])/'client.key',
-   incoming=['peer-in'],outgoing=['peer-out'],hermes_home=None,skills_dir=None))
+   incoming=chat.get('incoming_channels',['peer-in']),outgoing=chat.get('outgoing_channels',['peer-out']),hermes_home=None,skills_dir=None))
  for (path,data,mode),previous in zip(artifacts[:2],predecessors[:2]):publish(path,data,mode,previous)
 elif not all(present):
  print(json.dumps(dict(installed=False)));raise SystemExit(0)
@@ -138,14 +138,14 @@ if chat is not None:
  candidate=load_binding(attachment/'binding.json')
  assert candidate==dict(schema='dm.agent-chat.binding/v1',socket=chat['socket'],
   client_config=str(Path(chat['application'])/'client.json'),client_key=str(Path(chat['application'])/'client.key'),
-  request_dir=str(attachment/'requests'),incoming_channels=['peer-in'],outgoing_channels=['peer-out'])
+  request_dir=str(attachment/'requests'),incoming_channels=chat.get('incoming_channels',['peer-in']),outgoing_channels=chat.get('outgoing_channels',['peer-out']))
  peer=bridge(candidate).client
  from daimon_matrix.client import ClientConfig
  native=ClientConfig.load(root/'runtime/client.json',bytearray(protected_read(root/'runtime/client.key',size=32)))
  assert peer.config.expected_server==native.expected_server and peer.config.runtime_id==native.runtime_id
  connection=json.loads(protected_read(attachment/'connection.json'))
  assert connection['command']==[sys.executable,'-I','-m','daimon_matrix.agent_chat','--binding',str(attachment/'binding.json')]
- assert connection['incoming_channels']==['peer-in']
+ assert connection['incoming_channels']==chat.get('incoming_channels',['peer-in'])
  from daimon_matrix.mcp_server import MESSAGING_TOOL_CONTRACTS
  tools={tool['name']:tool for tool in connection['tools']}
  assert set(tools)=={'messaging_channels',*MESSAGING_TOOL_CONTRACTS}
@@ -238,6 +238,7 @@ class OwnerClient:
             if selected is None:
                 raise OnboardingError("backend_unavailable")
             application, _ = selected
+            group = application.endswith('/matrix/tribe/application')
             installer = (
                 Path(__file__).resolve().parents[1]
                 / "support/matrix-agent-chat/install_agent_chat.py"
@@ -252,10 +253,13 @@ class OwnerClient:
             payload["chat"] = dict(
                 application=application,
                 attachment=attachment,
-                socket="/home/agent/" + relative + "/runtime/peer.sock",
+                socket="/home/agent/" + relative +
+                    ("/runtime/tribe.sock" if group else "/runtime/peer.sock"),
                 installer=raw.decode(),
                 installer_sha256=expected_sha,
             )
+            if group:
+                payload['chat'].update(incoming_channels=['tribe'], outgoing_channels=['tribe'])
             payload["legacy_instructions"] = instructions
             payload["instructions"] += (
                 "\n# Native Matrix messaging\n\n"
@@ -263,7 +267,9 @@ class OwnerClient:
                 "Read its command argv and append channels or call messaging_send, messaging_reply,\n"
                 "messaging_delivery or messaging_inbox only for the current human request.\n"
                 "Pass JSON parameters on stdin; preserve exact send_id and parameters across retries.\n"
-                "Configured peer-in and peer-out reach the approved Source relation; require native receipts.\n"
+                + ("Configured tribe is one membership group; every member participates without pair enrollment.\n"
+                    if group else "This explicitly directed legacy attachment uses peer-in and peer-out.\n")
+                + "Require native receipts, not transport ACK or a claim that a model read.\n"
                 "Use the existing signed application and mandatory visibility. No direct Telegram fallback.\n"
                 "This manual helper starts no daemon, inbox polling, MCP service or model turn.\n"
             )

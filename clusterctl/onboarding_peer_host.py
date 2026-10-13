@@ -152,6 +152,18 @@ class PeerHost:
         return identity
 
     def application(self, plan: dict) -> tuple[str, str] | None:
+        observed = self.backend._matrix_command(plan, 'observe')
+        group = observed.get('group')
+        if group is not None:
+            root = '/home/agent/.local/state/daimon-onboarding/' + plan['name'] + '/matrix/tribe'
+            if (observed['phase'] != 'v8' or set(group) != {
+                    'tribe_ref', 'application', 'visibility', 'socket', 'channel_id'}
+                    or group['application'] != root + '/application'
+                    or group['visibility'] != root + '/visibility/installation.json'
+                    or group['socket'] != root.removesuffix('/tribe') + '/package/runtime/tribe.sock'
+                    or group['channel_id'] != 'tribe'):
+                raise OnboardingError('approved_onboarding_group_required')
+            return group['application'], group['visibility']
         self._identity(plan)
         path = self.state / digest(plan) / 'complete.json'
         if not path.exists() or not self._proxies(plan):
@@ -182,8 +194,26 @@ class PeerHost:
             self._execute(plan)
 
     def _execute(self, plan: dict) -> None:
-        if self.application(plan) is not None:
+        selected = self.application(plan)
+        group_root = '/home/agent/.local/state/daimon-onboarding/' + plan['name'] + '/matrix/tribe'
+        if selected == (group_root + '/application', group_root + '/visibility/installation.json'):
             return
+        # Automated onboarding never declares a founder/member Tribe or builds
+        # pair proxies. A missing signed group is an explicit deployment gap.
+        raise OnboardingError('onboarding_group_enrollment_required')
+
+    def repair_directed(self, plan: dict) -> None:
+        """Legacy explicit directed repair; never called by the worker.
+
+        This preserves retained recovery journals for an operator requesting
+        that exact repair. It does not implement same-Tribe enrollment.
+        """
+        lifecycle = private_directory(self.state / 'source-lifecycle', create=True)
+        with being_seed._locked(lifecycle):
+            self._repair_directed(plan)
+
+    def _repair_directed(self, plan: dict) -> None:
+        self._approved(plan)
         peer = self._identity(plan)
         directory = private_directory(self.state / digest(plan), create=True)
         self._proxies(plan, install=True)

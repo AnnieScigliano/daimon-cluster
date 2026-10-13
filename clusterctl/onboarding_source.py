@@ -109,6 +109,10 @@ class Source:
         from daimon_matrix.chat_host import application_view
         base = self._load(signed=True)
         views = [base]
+        group = onboarding_peer.approved_group_application(base, self.outputs / 'tribe')
+        if group is not None:
+            view = application_view(base, Path(group['directory']), Path(group['visibility']))
+            return [base, replace(view, socket_path=self.outputs / group['socket'])]
         seen = set()
         for fingerprint in self.settings['applications']:
             directory = self.directory(fingerprint)
@@ -234,6 +238,10 @@ def child() -> int:
         os.setuid(owner[0])
         source = Source(being_seed._read(config))
         if action == 'offer':
+            with source.writer():
+                group = onboarding_peer.approved_group_application(source._load(signed=True), source.outputs / 'tribe')
+            if group is not None:
+                raise OnboardingError('onboarding_group_enrollment_required')
             value = source.offer(request['plan_digest'], request['peer'], request['endpoints'])
         elif action == 'finish':
             value = source.finish(request['plan_digest'], request['response'])
@@ -244,6 +252,20 @@ def child() -> int:
             from daimon_matrix.client import ClientConfig, LocalClient
             native = ClientConfig.load(source.root / 'client.json', bytearray((source.root / 'client.key').read_bytes()))
             result = LocalClient(source.root / 'matrix.sock', native).runtime_status()[1]
+            # Observe the currently selected group instead of probing archived
+            # bootstrap sockets that the group deployment deliberately retired.
+            if (source.outputs / 'tribe/selection.json').exists():
+                from types import SimpleNamespace
+                group = onboarding_peer.observed_group(SimpleNamespace(
+                    root=source.outputs, package=source.outputs),
+                    source.tool.read_public(source.root / 'runtime.json'), socket_root=source.outputs)
+                selected = source.outputs / 'tribe/application'
+                client = ClientConfig.load(selected / 'client.json', bytearray((selected / 'client.key').read_bytes()))
+                if LocalClient(source.outputs / 'tribe.sock', client).invoke('messaging.send', {})[1].get('error', {}).get('code') != 'invalid_params':
+                    raise OnboardingError('onboarding_runtime_not_ready')
+                value = {'running': result.get('ok') is True, 'applications': [], 'group': group}
+                print(json.dumps(value))
+                return 0
             for fingerprint in source.settings['applications']:
                 application = source.directory(fingerprint) / 'application'
                 peer = ClientConfig.load(application / 'client.json', bytearray((application / 'client.key').read_bytes()))

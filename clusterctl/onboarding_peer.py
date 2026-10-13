@@ -2,7 +2,8 @@
 
 Only public signed identities, encrypted offers and signed responses cross the
 host boundary. Body custody and decrypted route material remain in the receiver.
-The upstream tool is retained unchanged with explicit repository provenance.
+The tool retains its upstream provenance and maintained receiving extensions;
+its selected bytes are qualified by the exact content hash.
 """
 from __future__ import annotations
 
@@ -19,7 +20,7 @@ from pathlib import Path
 from . import onboarding_release
 from .onboarding import OnboardingError, digest, private_directory
 
-TOOL_SHA256 = '35368bbadac08b45a804d58078ab9ce69f6cdcf5538bd41b1fa85de8fca39e54'
+TOOL_SHA256 = 'd1f67e40bbc8c08eff0e0f96354e107d2f8219b258c661b81b9e98a60565c03c'
 TOOL_MODULE = 'onboarding_peer_native.py'
 TOOL_COMMIT = '63968130294c4db6eac51a94800a837f2c10bad5'
 
@@ -127,6 +128,131 @@ def _authority_selections(target, tool, identity, known):
     return known, prior, authority, packets[0] if packets else None
 
 
+def additional_bundle(target, expected: dict, local_identity: dict) -> dict:
+    """Accept only exact owner-signed additional peers; preserve the base body."""
+    path = root(target) / 'additional-links.json'
+    if not path.exists():
+        return expected
+    tool = native(target.code, uid=target.code_uid)
+    packet = json.loads(onboarding_release.regular(path, uid=os.geteuid()))
+    document = packet['document']
+    tool.verify_document(local_identity, document, packet['binding'])
+    if (set(document) != {'schema', 'before_sha256', 'peers'}
+            or document['schema'] != 'cluster-onboarding-additional-peers/v1'
+            or document['before_sha256'] != digest(expected)
+            or not isinstance(document['peers'], list) or not 1 <= len(document['peers']) <= 16):
+        raise OnboardingError('approved_onboarding_peer_required')
+    selected = copy.deepcopy(expected)
+    import re
+    import uuid
+    from daimon_matrix.messaging_config import _read_publication
+    used_sockets = {'matrix.sock', 'peer.sock'}
+    for row in document['peers']:
+        if set(row) != {'identity', 'link_id', 'directory', 'visibility', 'socket', 'application_sha256'}:
+            raise OnboardingError('approved_onboarding_peer_required')
+        link = str(uuid.UUID(row['link_id']))
+        directory = target.root / 'additional-peers' / link
+        if (row['directory'] != str(directory / 'application')
+                or row['visibility'] != str(directory / 'visibility/installation.json')
+                or not isinstance(row['socket'], str)
+                or re.fullmatch(r'[a-z0-9_-]{1,19}\.sock', row['socket']) is None
+                or row['socket'] in used_sockets):
+            raise OnboardingError('approved_onboarding_peer_required')
+        used_sockets.add(row['socket'])
+        authority = tool.verify_identity(row['identity'])
+        if authority.state.being_ref == expected['manifest']['being_ref']:
+            raise OnboardingError('approved_onboarding_peer_required')
+        peers = selected['sources']['known_beings']
+        if any(peer['manifest']['being_ref'] == authority.state.being_ref for peer in peers):
+            raise OnboardingError('approved_onboarding_peer_required')
+        peers.append(tool.known_peer(row['identity']['document'], authority, [], link))
+        refs = selected['relationships']['known_being_refs']
+        refs.append(authority.state.being_ref)
+        refs.sort()
+        application, _ = _read_publication(Path(row['directory']),
+            lambda value, binding: tool.verify_document(local_identity, value, binding))
+        if digest(application) != row['application_sha256']:
+            raise OnboardingError('approved_onboarding_peer_required')
+    return selected
+
+
+def additional_applications(target) -> list[dict]:
+    """Called only after Target.observe authenticates the exact selection."""
+    path = root(target) / 'additional-links.json'
+    if not path.exists():
+        return []
+    packet = json.loads(onboarding_release.regular(path, uid=os.geteuid()))
+    return packet['document']['peers']
+
+
+def group_application(target, hosted):
+    return approved_group_application(hosted, target.root / 'tribe')
+
+
+def approved_group_application(hosted, group_root: Path):
+    """Select one owner-approved group, retaining pair enrollment as history.
+
+    This is a default application selection, not new identity or membership.
+    Native Matrix validates the publication, membership and transport after this
+    selector; old bootstrap apps are not started when their grants have ended.
+    """
+    from daimon_matrix.messaging_config import verify_binding
+    return _approved_group(group_root, lambda value, binding:
+        verify_binding(hosted, value, binding))
+
+
+def _approved_group(group_root: Path, verify):
+    from daimon_matrix.messaging_config import APPLICATION_SCHEMA_V3, _read_publication
+    path = group_root / 'selection.json'
+    if not path.exists():
+        return None
+    packet = json.loads(onboarding_release.regular(path, uid=os.geteuid()))
+    if set(packet) != {'document', 'binding'}:
+        raise OnboardingError('approved_onboarding_group_required')
+    document = packet['document']
+    verify(document, packet['binding'])
+    directory = group_root / 'application'
+    visibility = group_root / 'visibility' / 'installation.json'
+    if (set(document) != {'schema', 'tribe_ref', 'directory', 'visibility',
+                         'socket', 'application_sha256'}
+            or document['schema'] != 'cluster-onboarding-group-selection/v1'
+            or document['directory'] != str(directory)
+            or document['visibility'] != str(visibility)
+            or document['socket'] != 'tribe.sock'):
+        raise OnboardingError('approved_onboarding_group_required')
+    application, _ = _read_publication(directory, verify)
+    if (application['schema'] != APPLICATION_SCHEMA_V3
+            or application['tribe']['policy']['tribe_ref'] != document['tribe_ref']
+            or digest(application) != document['application_sha256']):
+        raise OnboardingError('approved_onboarding_group_required')
+    return document
+
+
+def observed_group(target, bundle: dict, *, socket_root: Path | None = None) -> dict | None:
+    """Read the body's signed group selection without opening another runtime.
+
+    Called after ordinary receiving identity validation. It proves selection,
+    not a model read or delivery, and never reconstructs archived pair routes.
+    """
+    import time
+    from daimon_matrix.canonical import unb64url
+    from daimon_matrix.operator_rebirth import authority_from_runtime_bundle
+    from daimon_matrix.messaging_config import _public_identity, verify_public_binding
+    directory = target.root / 'tribe'
+    if not (directory / 'selection.json').exists():
+        return None
+    authority = authority_from_runtime_bundle(bundle)
+    identity = _public_identity(authority, bundle['local_origin'], bundle['runtime_id'],
+        bundle['runtime_label'], time.time_ns() // 1000000)
+    key = unb64url(authority.credentials[identity['credential_id']]['body']['signing_key']['public'])
+    selected = _approved_group(directory, lambda value, binding:
+        verify_public_binding(identity, key, value, binding))
+    return dict(tribe_ref=selected['tribe_ref'], application=selected['directory'],
+        visibility=selected['visibility'], socket=str((target.package / 'runtime'
+            if socket_root is None else socket_root) / selected['socket']),
+        channel_id='tribe')
+
+
 def augmented(target, original: dict, bundle: dict) -> tuple[dict, bool]:
     """Verify only the exact native additive peer change, not a new identity.
 
@@ -177,6 +303,7 @@ def augmented(target, original: dict, bundle: dict) -> tuple[dict, bool]:
     if authorities[0].state.being_ref not in refs:
         refs.append(authorities[0].state.being_ref)
         refs.sort()
+    expected = additional_bundle(target, expected, identities[1])
     if bundle != expected:
         prior = copy.deepcopy(expected)
         prior['sources']['known_beings'] = [prior_known if row['manifest']['being_ref'] == authorities[0].state.being_ref else row
