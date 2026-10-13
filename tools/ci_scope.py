@@ -190,6 +190,7 @@ SDK_FILES = {'requirements-weave.txt', 'clusterctl/onboarding_sdk.py',
     'support/matrix-agent-chat/install_agent_chat.py',
     'support/matrix-agent-chat/PROVENANCE.json', 'tests/test_clusterd.py',
     'tests/test_onboarding_peer.py',
+    'clusterctl/onboarding_code_successor.py', 'tests/test_onboarding_code_successor.py',
     'tests/integration/test_recovery_rebirth_containers.py',
     'docs/runbooks/tribu-sdk-successor.md'}
 SDK_TESTS = tuple(sorted(set(ONBOARDING_CONTRACTS) | {

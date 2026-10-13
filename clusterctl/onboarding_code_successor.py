@@ -41,7 +41,8 @@ def verify(code: Path, fingerprint: str, base: Path, base_fingerprint: str, *, u
         from . import onboarding_telegram
         previous_telegram = onboarding_telegram.artifact(base, uid=uid)
         current_telegram = onboarding_telegram.artifact(code, uid=uid)
-        if current_telegram['commit'] != onboarding_telegram.COMMIT or previous_telegram == current_telegram:
+        if current_telegram['commit'] not in {onboarding_telegram.COMMIT,
+                onboarding_telegram.RETAINED_CURRENT_COMMIT} or previous_telegram == current_telegram:
             raise OnboardingError('qualified_telegram_successor_required')
         expected.update(schema=TELEGRAM_SCHEMA,
             previous_telegram_digest=digest(previous_telegram), telegram_digest=digest(current_telegram))
@@ -105,7 +106,8 @@ def build(base: Path, base_fingerprint: str, source: Path, modules: tuple[str, .
         # Validate before creating output; no receiving home or token is read.
         previous_telegram = onboarding_telegram.artifact(base, uid=os.geteuid())
         current_telegram = onboarding_telegram.artifact_directory(telegram, uid=os.geteuid())
-        if current_telegram['commit'] != onboarding_telegram.COMMIT or current_telegram == previous_telegram:
+        if current_telegram['commit'] not in {onboarding_telegram.COMMIT,
+                onboarding_telegram.RETAINED_CURRENT_COMMIT} or current_telegram == previous_telegram:
             raise OnboardingError('qualified_telegram_successor_required')
         marker.update(schema=TELEGRAM_SCHEMA, previous_telegram_digest=digest(previous_telegram),
                       telegram_digest=digest(current_telegram))

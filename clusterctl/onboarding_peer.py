@@ -369,7 +369,7 @@ def adopt_authority(target, authority: dict, history: list, *, native_visibility
         else:
             _atomic_write(selected, canonical_bytes(dict(document=proposal,
                 binding=create_binding(runtime, proposal))))
-        adoption = adopt_peer_authority(runtime, authority, history)
+        adopt_peer_authority(runtime, authority, history)
         current = loaded(target)
         if native_visibility is not None:
             _reissue_installation(current, native_visibility,
