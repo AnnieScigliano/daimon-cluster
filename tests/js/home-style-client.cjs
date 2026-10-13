@@ -15,3 +15,21 @@ test('actual parent sends validated appearance; siblings/null origin/unsafe CSS 
  f.listeners.message({source:f.parent,origin:'https://home.example',data:{...data,appearance:null}});assert.deepEqual(f.values,{});
 });
 test('explicitly authored work never subscribes to default appearance',()=>{assert.equal(fixture('explicit').listeners.message,undefined);});
+test('a stalled refresh times out and resumes; a hidden/closed page cannot apply a stale response',async()=>{
+ const events={},timers=[],fetches=[],styleValues={};
+ const document={visibilityState:'visible',documentElement:{style:{setProperty:(k,v)=>styleValues[k]=v,removeProperty:k=>delete styleValues[k]}},body:{style:{}},querySelectorAll:()=>[],addEventListener:(key,fn)=>events[key]=fn};
+ const context={document,window:{addEventListener:(key,fn)=>events[key]=fn,dispatchEvent:()=>{}},location:{pathname:'/'},AbortController,
+  setTimeout:(fn,delay)=>{timers.push({fn,delay});return timers.length;},clearTimeout:()=>{},CustomEvent:class{},
+  fetch:(_url,options)=>new Promise(resolve=>fetches.push({resolve,signal:options.signal}))};
+ vm.createContext(context);vm.runInContext(fs.readFileSync('clusterctl/homes/assets/home-style.js','utf8'),context);
+ assert.equal(fetches.length,1);
+ timers.find(t=>t.delay===10000).fn();assert.equal(fetches[0].signal.aborted,true);
+ events['home-style:refresh']();assert.equal(fetches.length,2);
+ document.visibilityState='hidden';events.visibilitychange();assert.equal(fetches[1].signal.aborted,true);
+ fetches[1].resolve({ok:true,json:async()=>({contract:'homemaker.resolved/v1',appearance})});
+ await new Promise(resolve=>setImmediate(resolve));assert.deepEqual(styleValues,{});
+ document.visibilityState='visible';events.visibilitychange();assert.equal(fetches.length,3);
+ fetches[2].resolve({ok:true,json:async()=>({contract:'homemaker.resolved/v1',appearance})});
+ await new Promise(resolve=>setImmediate(resolve));assert.equal(styleValues['--space'],appearance.background);
+ events.pagehide();assert.equal(fetches[2].signal.aborted,false);
+});
