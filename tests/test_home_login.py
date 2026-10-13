@@ -1,5 +1,6 @@
 """Shared login preserves identity, exact origins and existing permissions."""
 from dataclasses import replace
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from http.client import HTTPConnection
 import json
@@ -10,7 +11,8 @@ import pytest
 from clusterctl.homes.login import Google, Login
 from clusterctl.homes.service import handler
 from tests.test_home_gateway import serving
-from tests.test_home_passkeys import system, enrolled, assertion
+from tests.test_home_passkeys import system, enrolled, assertion, registration
+from clusterd.auth import hash_token
 
 
 @pytest.fixture
@@ -102,6 +104,44 @@ def test_global_logout_invalidates_derived_home_session(login_system):
     app.sessions.revoke(home=app.sso.context, token=token)
     assert app.identity(child, 'two', app.homes['two']['public_url']) is None
     assert app.sessions.resolve_content(ticket, content_origin='https://content.example.test') is None
+
+
+@pytest.mark.parametrize('invalid', ['logout', 'expiry'])
+def test_invalid_master_cannot_enroll_finish_or_revoke_from_child(login_system, invalid):
+    app, clock = login_system
+    token, identifier = master(app)
+    request, secret, browser = handoff(app, token)
+    origin=app.homes['two']['public_url']
+    child, _ = app.sso.redeem('two', origin, request, secret, browser)
+    start, proof=app.passkeys.begin(home='two',origin=origin,mode='register',token=child)
+    _, credential=registration(start['options'],origin=origin)
+    if invalid=='logout': app.sessions.revoke(home=app.sso.context,token=token)
+    else:
+        with closing(app.sessions.connect()) as db:
+            db.execute('UPDATE sessions SET expires=? WHERE digest=?',(clock[0]+1,hash_token(token)))
+        clock[0]+=2
+    with pytest.raises(ValueError,match='fresh_browser'):
+        app.passkeys.begin(home='two',origin=origin,mode='register',token=child)
+    with pytest.raises(ValueError,match='fresh_browser'):
+        app.passkeys.finish(home='two',origin=origin,mode='register',token=child,
+            nonce=start['nonce'],proof=proof,credential=credential)
+    with pytest.raises(ValueError,match='fresh_browser'):
+        app.passkeys.revoke(home='two',origin=origin,token=child,browser_proof='',identifier=identifier)
+    assert len(app.passkeys.list(app.authority.actor('human')))==1
+
+
+def test_new_handoff_does_not_refresh_an_old_passkey_ceremony(login_system):
+    app, clock = login_system
+    token, identifier = master(app)
+    clock[0]+=901
+    request, secret, proof=handoff(app,token)
+    origin=app.homes['two']['public_url']
+    child, _=app.sso.redeem('two',origin,request,secret,proof)
+    assert app.identity(child,'two',origin).ref=='human'
+    with pytest.raises(ValueError,match='fresh_browser'):
+        app.passkeys.begin(home='two',origin=origin,mode='register',token=child)
+    with pytest.raises(ValueError,match='fresh_browser'):
+        app.passkeys.revoke(home='two',origin=origin,token=child,browser_proof='',identifier=identifier)
 
 
 @pytest.mark.parametrize('origin', ['https://', 'http://auth.example.test', 'https://one.example.test',

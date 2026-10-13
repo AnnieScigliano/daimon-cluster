@@ -115,6 +115,25 @@ class Sessions:
                 db.rollback()
                 raise
 
+    def active(self, db, row, now, *, max_age=None):
+        """Check session ancestry inside the caller's existing transaction."""
+        seen = set()
+        for _ in range(8):
+            if (not row or row['revoked'] or not row['created'] <= now < row['expires']
+                    or row['digest'] in seen or (max_age is not None and now-row['created'] > max_age)):
+                return False
+            seen.add(row['digest'])
+            parent = db.execute('SELECT parent FROM session_parents WHERE child=?',
+                                (row['digest'],)).fetchone()
+            if not parent:
+                return True
+            source = db.execute('SELECT * FROM sessions WHERE digest=?',
+                                (parent['parent'],)).fetchone()
+            if not source or (source['actor'], source['revision']) != (row['actor'], row['revision']):
+                return False
+            row = source
+        return False
+
     def resolve(self, token, *, home, origin):
         if not isinstance(token, str) or not re.fullmatch(r"[A-Za-z0-9_-]{43}", token):
             return None
@@ -129,18 +148,8 @@ class Sessions:
                     row
                     and row["home"] == home
                     and row["origin"] == origin
-                    and not row["revoked"]
-                    and row["created"] <= now < row["expires"]
+                    and self.active(db, row, now)
                 )
-                if valid:
-                    parent = db.execute('SELECT parent FROM session_parents WHERE child=?',
-                                        (row['digest'],)).fetchone()
-                    if parent:
-                        source = db.execute('SELECT * FROM sessions WHERE digest=?',
-                                            (parent['parent'],)).fetchone()
-                        valid = bool(source and not source['revoked']
-                                     and source['created'] <= now < source['expires']
-                                     and (source['actor'],source['revision']) == (row['actor'],row['revision']))
                 db.commit()
                 return dict(row) if valid else None
             except BaseException:
@@ -374,18 +383,10 @@ class Sessions:
                     valid = (
                         parent
                         and parent["home"] == row["home"]
-                        and not parent["revoked"]
-                        and parent["created"] <= now < parent["expires"]
+                        and self.active(db, parent, now)
                         and (parent["actor"], parent["revision"])
                         == (row["actor"], row["revision"])
                     )
-                    if valid:
-                        ancestor=db.execute('SELECT parent FROM session_parents WHERE child=?',
-                                            (parent['digest'],)).fetchone()
-                        if ancestor:
-                            source=db.execute('SELECT * FROM sessions WHERE digest=?',(ancestor['parent'],)).fetchone()
-                            valid=bool(source and not source['revoked'] and source['created']<=now<source['expires']
-                                       and (source['actor'],source['revision'])==(parent['actor'],parent['revision']))
                 db.commit()
                 return dict(row) if valid else None
             except BaseException:

@@ -100,8 +100,7 @@ class Passkeys:
             or not row
             or row["home"] != home
             or row["origin"] != origin
-            or row["revoked"]
-            or not row["created"] <= now < row["expires"]
+            or not self.sessions.active(db, row, now, max_age=900)
             or now - row["created"] > 900
         ):
             raise ValueError("fresh_browser_sign_in_required")
