@@ -26,6 +26,7 @@ from .authority import NativeAuthority
 from .policy import Policy, validate_audience
 from .registry import Registry
 from .sessions import Sessions
+from .styles import StyleConsumer
 
 MAX_MANIFEST = 8 * 1024 * 1024
 
@@ -200,7 +201,8 @@ class Backend:
 
 
 class Application:
-    def __init__(self, config, authority, sessions, *, backends=None, passkey_rp_id=None, client_example=False):
+    def __init__(self, config, authority, sessions, *, backends=None, passkey_rp_id=None, client_example=False, style_provider=None):
+        self.styles = StyleConsumer(style_provider, authority, config["homes"]) if style_provider else None
         self.client_example = client_example
         self.config, self.homes, self.authority, self.sessions = (
             config,
@@ -459,7 +461,7 @@ def render(home, works, subject, vpn, *, signed_out=False, passkeys=False, key_r
     )
     if key_revoked:
         notice = '<p role="status">Access key revoked. Sessions opened with it are closed.</p>'
-    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(home["name"])} · Home</title><link rel="stylesheet" href="/home.css">{script}</head><body><main><nav><span>DAIMON MATRIX</span>{auth}</nav>{notice}<p id="passkey-status" role="status" aria-live="polite"></p><header><svg viewBox="0 0 88 48" aria-hidden="true"><ellipse cx="44" cy="24" rx="41" ry="17"/><ellipse cx="44" cy="24" rx="22" ry="22"/><circle cx="44" cy="24" r="4"/></svg><small>{esc(scope)}</small><h1>{esc(home["name"])}</h1><p>A shared starting place for ideas, experiments and things we make.</p><a href="{esc(home["vpn_url"], quote=True)}">Dedicated VPN space ↗</a></header><section class="works">{cards or "<p>Room for what comes next. Selected work will appear here as it is shared.</p>"}</section><nav class="ring" aria-label="Tribe web-ring">{rings}</nav><footer>Only work selected for your current access is shown. This page does not indicate current daimon activity.</footer></main></body></html>'''.encode()
+    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(home["name"])} · Home</title><link rel="stylesheet" href="/home.css"><script src="/home-style.js" defer></script>{script}</head><body><main><nav><span>DAIMON MATRIX</span>{auth}</nav>{notice}<p id="passkey-status" role="status" aria-live="polite"></p><header><svg viewBox="0 0 88 48" aria-hidden="true"><ellipse cx="44" cy="24" rx="41" ry="17"/><ellipse cx="44" cy="24" rx="22" ry="22"/><circle cx="44" cy="24" r="4"/></svg><small>{esc(scope)}</small><h1>{esc(home["name"])}</h1><p>A shared starting place for ideas, experiments and things we make.</p><a href="{esc(home["vpn_url"], quote=True)}">Dedicated VPN space ↗</a></header><section class="works">{cards or "<p>Room for what comes next. Selected work will appear here as it is shared.</p>"}</section><nav class="ring" aria-label="Tribe web-ring">{rings}</nav><footer>Only work selected for your current access is shown. This page does not indicate current daimon activity.</footer></main></body></html>'''.encode()
 
 
 def preview(app, home, reference, version, subject, vpn, *, origin, parent_token, display_mode="details"):
@@ -520,7 +522,7 @@ def preview(app, home, reference, version, subject, vpn, *, origin, parent_token
             media_files = [name for name in selected["files"] if re.fullmatch(r"media/[a-f0-9]{64}\.[a-z0-9]{1,8}", name)]
             download_root = "/works/" + reference + "/" + selected["version_ref"] + "/"
             display = display.replace('<iframe ', '<iframe data-download-root="' + esc(download_root, quote=True) + '" data-download-files="' + esc(json.dumps(media_files), quote=True) + '" ', 1)
-        return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(selected["title"])} · {esc(app.homes[home]["name"])}</title><link rel="stylesheet" href="/home.css"><script src="/work-view.js" defer></script></head><body class="work-view">{display}</body></html>'''.encode()
+        return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(selected["title"])} · {esc(app.homes[home]["name"])}</title><link rel="stylesheet" href="/home.css"><script src="/home-style.js" defer></script><script src="/work-view.js" defer></script></head><body class="work-view">{display}</body></html>'''.encode()
     versions = ['<li><a href="/view/' + reference + '">Current version</a></li>']
     for previous in reversed(current.get("versions", [])):
         if app.policy.allows(previous, home=home, subject=subject, dedicated_vpn=vpn):
@@ -543,7 +545,7 @@ def preview(app, home, reference, version, subject, vpn, *, origin, parent_token
         for filename in selected["files"]
     )
     auth, script = auth_controls(subject, vpn, bool(app.passkeys), '/view/' + reference)
-    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(selected["title"])} · {esc(app.homes[home]["name"])}</title><link rel="stylesheet" href="/home.css">{script}</head><body><main><nav><a href="/">← Home</a>{auth}</nav><p id="passkey-status" role="status" aria-live="polite"></p><header><small>{esc(selected["visibility"])} · {"Current version" if version == "current" else "Earlier version"}</small><h1>{esc(selected["title"])}</h1><p>{esc(selected["summary"])}</p><a href="{esc(source, quote=True)}">Open selected work ↗</a></header>{display}<details><summary>Selected files</summary><ul>{files}</ul></details><details><summary>Versions available to you</summary><ul>{"".join(versions)}</ul></details></main></body></html>'''.encode()
+    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(selected["title"])} · {esc(app.homes[home]["name"])}</title><link rel="stylesheet" href="/home.css"><script src="/home-style.js" defer></script>{script}</head><body><main><nav><a href="/">← Home</a>{auth}</nav><p id="passkey-status" role="status" aria-live="polite"></p><header><small>{esc(selected["visibility"])} · {"Current version" if version == "current" else "Earlier version"}</small><h1>{esc(selected["title"])}</h1><p>{esc(selected["summary"])}</p><a href="{esc(source, quote=True)}">Open selected work ↗</a></header>{display}<details><summary>Selected files</summary><ul>{files}</ul></details><details><summary>Versions available to you</summary><ul>{"".join(versions)}</ul></details></main></body></html>'''.encode()
 
 
 def key_page(app, subject=None, *, registered=False):
@@ -682,6 +684,20 @@ def handler(app, *, owner=False):
                         ),
                         "text/html; charset=utf-8",
                     )
+                elif path in ("/home-style.js", "/artifact-style.js"):
+                    self.respond(200, (Path(__file__).parent / "assets" / path[1:]).read_bytes(), "text/javascript; charset=utf-8")
+                elif path == "/style.json":
+                    if not app.styles:
+                        self.respond(200, {"contract":"homemaker.resolved/v1","mode":"default","style_ref":"default","style_revision":None,"appearance":None})
+                        return
+                    query = parse_qs(urlsplit(self.path).query, strict_parsing=True)
+                    surface = query.get("surface", ["home"])
+                    if set(query) - {"surface"} or len(surface) != 1:
+                        raise ValueError("invalid_style_surface")
+                    surface = surface[0]
+                    if surface != "home" and not app.selected(home, surface, "current", subject, vpn):
+                        raise ValueError("style_surface_denied")
+                    self.respond(200, app.styles.resolved(home, surface, subject))
                 elif path == "/access/status":
                     self.respond(200, {
                         "contract": "dm.home-browser/v1",

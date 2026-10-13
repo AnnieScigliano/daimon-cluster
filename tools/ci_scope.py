@@ -211,6 +211,9 @@ HOME_FILES = {'clusterctl/homes/__init__.py', 'clusterctl/homes/policy.py',
     'clusterctl/homes/sessions.py', 'clusterctl/homes/authority.py',
     'clusterctl/homes/registry.py', 'clusterctl/homes/service.py',
     'clusterctl/homes/passkeys.py', 'clusterctl/homes/assets/passkeys.js',
+    'clusterctl/homes/styles.py', 'tests/test_home_styles.py',
+    'clusterctl/homes/assets/home-style.js', 'clusterctl/homes/assets/artifact-style.js',
+    'docs/design/shared-home-styles.md', 'tests/js/home-style-client.cjs',
     'clusterctl/homes/assets/access-client.js', 'tests/test_home_client.py',
     'tests/js/home-access-client.cjs', 'docs/design/home-browser-client.md',
     'clusterctl/homes/examples/library/index.html',
@@ -222,7 +225,7 @@ HOME_FILES = {'clusterctl/homes/__init__.py', 'clusterctl/homes/policy.py',
     'clusterd/assets/fonts/OFL.txt', 'clusterd/assets/fonts/PROVENANCE.json',
     'tests/test_home_access.py', 'tests/test_home_gateway.py', 'tests/test_home_host.py'}
 HOME_TESTS = ('tests/test_home_access.py', 'tests/test_home_gateway.py', 'tests/test_home_host.py',
-              'tests/test_home_passkeys.py', 'tests/test_home_client.py',
+              'tests/test_home_passkeys.py', 'tests/test_home_client.py', 'tests/test_home_styles.py',
               'tests/test_auth.py', 'tests/test_ci_scope.py', 'tests/test_ci_workflow.py')
 
 
