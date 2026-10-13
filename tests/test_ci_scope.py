@@ -337,3 +337,12 @@ def test_closed_runbook_docs_skip_runtime_jobs_but_mixed_changes_keep_coverage()
     workflow = (ROOT / '.github/workflows/tests.yml').read_text()
     test_job = workflow.split('  test:\n', 1)[1].split('    steps:', 1)[0]
     assert "if: needs.scope.outputs.profile != 'docs'" in test_job
+
+
+def test_membership_group_successor_keeps_receiving_contracts_without_physical_jobs(tmp_path):
+    from tools.ci_scope import GROUP_FILES, GROUP_TESTS
+    changed = sorted(GROUP_FILES)
+    assert select(changed, ROOT) == ('sdk', list(GROUP_TESTS))
+    assert select(changed, tmp_path) == ('full', ['tests'])
+    for boundary in ('clusterctl/production_fences.py', 'constraints.txt', 'unknown.py'):
+        assert select(changed + [boundary], ROOT) == ('full', ['tests'])

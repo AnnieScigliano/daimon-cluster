@@ -205,6 +205,23 @@ SDK_TESTS = tuple(sorted(set(ONBOARDING_CONTRACTS) | {
     'tests/test_onboarding_credential.py'}))
 
 
+GROUP_FILES = {'tests/test_onboarding_group.py',
+    'clusterctl/onboarding_acceptance.py', 'clusterctl/onboarding_target.py',
+    'clusterctl/onboarding_peer_host.py', 'clusterctl/onboarding_source.py',
+    'clusterctl/onboarding_runtime.py', 'tools/managed_peer_plan.py',
+    'tests/test_onboarding_peer_host.py', 'AGENTS.md', 'RESUME.md',
+    'docs/design/onboarding-jobs.md'} | SDK_FILES
+GROUP_TESTS = ('tests/test_onboarding_group.py', 'tests/test_onboarding_acceptance.py',
+    'tests/test_onboarding_sdk.py', 'tests/test_onboarding_code_successor.py',
+    'tests/test_onboarding_source.py', 'tests/test_onboarding_peer_host.py',
+    'tests/test_onboarding_owner_client.py', 'tests/test_onboarding_runtime.py',
+    'tests/test_matrix_host.py', 'tests/test_matrix_status.py',
+    'tests/test_onboarding_peer.py::test_actual_native_peer_accept_keeps_credential_receipt_and_receiving_writes',
+    'tests/test_onboarding_target.py', 'tests/test_onboarding_credential.py',
+    'tests/test_admission.py', 'tests/test_production_fences.py',
+    'tests/test_ci_scope.py', 'tests/test_ci_workflow.py')
+
+
 RECEIVING_RUNTIME_FILES = {'clusterctl/onboarding_peer.py', 'clusterctl/onboarding_runtime.py',
     'tests/test_onboarding_peer.py', 'tests/test_onboarding_runtime.py'}
 
@@ -216,6 +233,12 @@ def select(changed: list[str], root: Path) -> tuple[str, list[str]]:
         return 'docs', []
     if set(changed) <= CI_FILES | RUNBOOK_DOCS:
         return 'ci', ['tests/test_ci_scope.py', 'tests/test_ci_workflow.py']
+    if ('tests/test_onboarding_group.py' in changed
+            and set(changed) <= GROUP_FILES | CI_FILES
+            and all((root / path.split('::', 1)[0]).is_file() for path in GROUP_TESTS)):
+        # Signed group selection, exact SDK and native/receiving contracts.
+        # No changed archive exporter, physical recovery or model lifecycle.
+        return 'sdk', list(GROUP_TESTS)
     if (set(changed) & {'clusterctl/onboarding_peer.py', 'clusterctl/onboarding_runtime.py'}
             and set(changed) <= RECEIVING_RUNTIME_FILES | CI_FILES
             and all((root / path).is_file() for path in SDK_TESTS)):

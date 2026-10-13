@@ -569,10 +569,13 @@ def policies(plan: dict[str, Any]) -> list[dict[str, Any]]:
     authorities = [verify_identity(p) for p in plan["identities"]]
     beings = [a.state.being_ref for a in authorities]
     events = {e["event_id"]: e for e in plan["events"]}
-    founder_membership = next(
-        e["event_id"] for e in plan["events"] if e["kind"] == "matrix/tribe-declaration"
-    )
-    membership_ids = [founder_membership, plan["membership_event"]]
+    if plan["tribe_ref"] is None:
+        membership_ids = [None, None]
+    else:
+        founder_membership = next(
+            e["event_id"] for e in plan["events"] if e["kind"] == "matrix/tribe-declaration"
+        )
+        membership_ids = [founder_membership, plan["membership_event"]]
     result = []
     for i, authority in enumerate(authorities):
         origin = plan["identities"][i]["document"]["origin"]
@@ -670,7 +673,8 @@ def sign_proposals(
         or dict(runtime.service.origin) != local["origin"]
     ):
         raise ValueError("chat_link_local_identity_mismatch")
-    if len(plan["events"]) not in (9, 10, 11):
+    direct = plan.get("temporary_repair") is True and plan["tribe_ref"] is None
+    if len(plan["events"]) not in ((6,) if direct else (9, 10, 11)):
         raise ValueError("chat_link_event_count")
     actual = next(
         (
@@ -696,6 +700,11 @@ def sign_proposals(
         "matrix/relationship-grant",
         "matrix/relationship-grant-acceptance",
     }
+    if direct:
+        allowed &= {
+            "matrix/relationship-offer", "matrix/relationship-acceptance",
+            "matrix/relationship-grant", "matrix/relationship-grant-acceptance",
+        }
     for event in plan["events"]:
         owner = 0 if event["being_ref"] == authorities[0].state.being_ref else 1
         if (
@@ -715,7 +724,11 @@ def sign_proposals(
         ):
             raise ValueError("chat_link_grant_scope")
         if owner != actor:
-            verify_event(event, authorities[owner])
+            # Initiator signs first without inventing the responder's signature.
+            # Acceptance still requires every initiator event to be signed, and
+            # installation independently verifies the complete signed graph.
+            if not (direct and actor == 0 and "signature" not in event):
+                verify_event(event, authorities[owner])
             result.append(event)
             continue
         sequence += 1
@@ -853,6 +866,24 @@ def replace_document(path: Path, value: Any) -> None:
     _fsync_directory(path.parent)
 
 
+def _check_link_view(view: Any, plan: dict[str, Any]) -> None:
+    if plan["tribe_ref"] is None:
+        if plan.get("temporary_repair") is not True or len(plan["events"]) != 6:
+            raise ValueError("chat_link_direct_scope")
+        relationship = view.relationships.get(plan["relationship_id"])
+        if relationship is None or relationship["state"] != "active":
+            raise ValueError("chat_link_not_mutually_authorized")
+        for grant_event in plan["grant_events"]:
+            grant = next(e for e in plan["events"] if e["event_id"] == grant_event)
+            row = view.grants.get(grant["payload"]["grant_id"])
+            if row is None or row["state"] != "active":
+                raise ValueError("chat_link_not_mutually_authorized")
+    else:
+        snapshot = view.snapshot(plan["tribe_ref"])
+        if len(snapshot.value["members"]) != 2 or len(snapshot.value["grants"]) != 2:
+            raise ValueError("chat_link_not_mutually_authorized")
+
+
 def install_link(
     runtime_root: Path,
     password: bytes,
@@ -904,6 +935,12 @@ def install_link(
     authorities = [verify_identity(p) for p in plan["identities"]]
     beings = [a.state.being_ref for a in authorities]
     by_being = dict(zip(beings, authorities, strict=True))
+    supporting = plan.get("supporting_identity")
+    if supporting is not None:
+        support = verify_identity(supporting)
+        if support.state.being_ref in by_being:
+            raise ValueError("chat_link_supporting_identity_conflict")
+        by_being[support.state.being_ref] = support
     # Validate every real signature and the complete grant graph before modifying
     # runtime configuration, its canonical ledger, or an application directory.
     import tempfile
@@ -921,9 +958,7 @@ def install_link(
                 card, by_being[card["being_ref"]], at_ms=at
             ),
         )
-        snapshot = view.snapshot(plan["tribe_ref"])
-        if len(snapshot.value["members"]) != 2 or len(snapshot.value["grants"]) != 2:
-            raise ValueError("chat_link_not_mutually_authorized")
+        _check_link_view(view, plan)
     for index, disclosure in enumerate(disclosures(plan)):
         for i in range(2):
             identity = plan["identities"][i]["document"]
@@ -980,6 +1015,10 @@ def install_link(
         from daimon_matrix.relationship_store import RelationshipView
 
         context = preflight.service.relationships
+        if supporting is not None:
+            trusted = context.authority_resolver(support.state.being_ref)
+            if trusted.manifest.digest != support.manifest.digest:
+                raise ValueError("chat_link_supporting_authority_mismatch")
         combined = [*context.store.events(), *plan["prior_cards"], *events]
         combined = list({canonical_bytes(event): event for event in combined}.values())
 
@@ -990,9 +1029,8 @@ def install_link(
                 )
             return context.card_verifier(card, at)
 
-        RelationshipView(combined, at_ms=now(), card_verifier=verify_card).snapshot(
-            plan["tribe_ref"]
-        )
+        view = RelationshipView(combined, at_ms=now(), card_verifier=verify_card)
+        _check_link_view(view, plan)
     if not (output / "runtime-before.json").exists():
         put(output / "runtime-before.json", bundle)
     peer = plan["identities"][1 - actor]["document"]
@@ -1119,7 +1157,7 @@ def install_link(
             else "dm.messaging.application/v1"
         ),
         "listen": {"host": endpoint.hostname, "port": endpoint.port},
-        "authorities": [p["document"]["authority"] for p in plan["identities"]],
+        "authorities": [p["document"]["authority"] for p in [*plan["identities"], *([supporting] if supporting else [])]],
         "relationship_events": [*plan["prior_cards"], *events],
         "relationship_mode": {
             "mode": "shared",

@@ -261,8 +261,15 @@ class Target:
                     raise OnboardingError('existing_onboarding_target_preserved')
                 from .onboarding_peer import augmented
                 peer_receipt, peer_complete = augmented(self, expected, bundle)
-                return dict(phase='v8' if peer_complete else 'peer-published', request=request, receipt=peer_receipt)
-            return dict(phase="v8" if complete.exists() else "v8-published", request=request, receipt=current_receipt)
+                result = dict(phase='v8' if peer_complete else 'peer-published', request=request, receipt=peer_receipt)
+            else:
+                result = dict(phase="v8" if complete.exists() else "v8-published", request=request, receipt=current_receipt)
+            if result['phase'] == 'v8':
+                from .onboarding_peer import observed_group
+                group = observed_group(self, bundle)
+                if group is not None:
+                    result['group'] = group
+            return result
         return dict(phase="credential-pending" if self.existing else "v7", request=request, receipt=receipt)
 
     def credential_request(self) -> dict:
