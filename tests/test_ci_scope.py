@@ -415,3 +415,11 @@ def test_native_observation_keeps_actual_signed_presence_and_owner_contracts(tmp
             'tests/test_onboarding_owner_client.py', 'tests/test_onboarding_code_successor.py'} <= set(tests)
     assert select(changed, tmp_path) == ('full', ['tests'])
     assert select(changed + ['clusterctl/onboarding_sdk.py'], ROOT)[0] != 'portal'
+
+
+def test_shared_style_consumer_guide_alone_skips_runtime_but_code_keeps_home_contracts():
+    guide = 'docs/design/shared-home-styles.md'
+    assert select([guide], ROOT) == ('docs', [])
+    profile, tests = select([guide, 'clusterctl/homes/assets/home-style.js'], ROOT)
+    assert profile == 'homes' and 'tests/test_home_styles.py' in tests
+    assert select([guide, 'clusterctl/production_fences.py'], ROOT) == ('full', ['tests'])

@@ -26,6 +26,7 @@ from .authority import NativeAuthority
 from .policy import Policy, validate_audience
 from .registry import Registry
 from .sessions import Sessions
+from .styles import StyleConsumer
 
 MAX_MANIFEST = 8 * 1024 * 1024
 
@@ -200,8 +201,10 @@ class Backend:
 
 
 class Application:
-    def __init__(self, config, authority, sessions, *, backends=None, passkey_rp_id=None, client_example=False, auth_origin=None, google_client=None):
+    def __init__(self, config, authority, sessions, *, backends=None, passkey_rp_id=None, client_example=False, style_provider=None, auth_origin=None, google_client=None, homemaker_source=None, homemaker_state=None):
+        self.styles = StyleConsumer(style_provider, authority, config["homes"]) if style_provider else None
         self.sso = None
+        self.designs = None
         self.client_example = client_example
         self.config, self.homes, self.authority, self.sessions = (
             config,
@@ -237,6 +240,12 @@ class Application:
             self.sso = Login(self, auth_origin, Google(google_client) if google_client else None)
         elif google_client:
             raise ValueError('google_requires_shared_login')
+        if homemaker_source or homemaker_state:
+            if not (homemaker_source and homemaker_state) or style_provider:
+                raise ValueError('one_canonical_homemaker_required')
+            from .homemaker import Homemaker
+            self.designs = Homemaker(self, homemaker_source, homemaker_state)
+            self.styles = StyleConsumer(self.designs, authority, self.homes)
 
     def identity(self, token, home, origin):
         row = self.sessions.resolve(token, home=home, origin=origin)
@@ -288,6 +297,16 @@ class Application:
             or not self.sessions.owner(token, home=home, subject=owner)
         ):
             raise ValueError("home_owner_binding_unavailable")
+        if operation in ('style-baseline', 'style-default'):
+            if not self.designs:
+                raise ValueError('homemaker_unavailable')
+            if operation == 'style-baseline':
+                if set(payload) != {'variant'}:
+                    raise ValueError('invalid_design_request')
+                self.designs.variant(payload['variant'])
+                return self.designs.authority.editor_default(owner.ref,
+                    owner={'kind':'being','ref':owner.ref},identifier=payload['variant'])
+            return self.designs.save_native(home, owner, payload)
         if operation == "validate-audience":
             validate_audience(
                 payload,
@@ -469,7 +488,7 @@ def render(home, works, subject, vpn, *, signed_out=False, passkeys=False, key_r
     )
     if key_revoked:
         notice = '<p role="status">Access key revoked. Sessions opened with it are closed.</p>'
-    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(home["name"])} · Home</title><link rel="stylesheet" href="/home.css">{script}</head><body><main><nav><span>DAIMON MATRIX</span>{auth}</nav>{notice}<p id="passkey-status" role="status" aria-live="polite"></p><header><svg viewBox="0 0 88 48" aria-hidden="true"><ellipse cx="44" cy="24" rx="41" ry="17"/><ellipse cx="44" cy="24" rx="22" ry="22"/><circle cx="44" cy="24" r="4"/></svg><small>{esc(scope)}</small><h1>{esc(home["name"])}</h1><p>A shared starting place for ideas, experiments and things we make.</p><a href="{esc(home["vpn_url"], quote=True)}">Dedicated VPN space ↗</a></header><section class="works">{cards or "<p>Room for what comes next. Selected work will appear here as it is shared.</p>"}</section><nav class="ring" aria-label="Tribe web-ring">{rings}</nav><footer>Only work selected for your current access is shown. This page does not indicate current daimon activity.</footer></main></body></html>'''.encode()
+    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(home["name"])} · Home</title><link rel="stylesheet" href="/home.css"><script src="/home-style.js" defer></script>{script}</head><body><main><nav><span>DAIMON MATRIX</span>{auth}</nav>{notice}<p id="passkey-status" role="status" aria-live="polite"></p><header><svg viewBox="0 0 88 48" aria-hidden="true"><ellipse cx="44" cy="24" rx="41" ry="17"/><ellipse cx="44" cy="24" rx="22" ry="22"/><circle cx="44" cy="24" r="4"/></svg><small>{esc(scope)}</small><h1>{esc(home["name"])}</h1><p>A shared starting place for ideas, experiments and things we make.</p><a href="{esc(home["vpn_url"], quote=True)}">Dedicated VPN space ↗</a></header><section class="works">{cards or "<p>Room for what comes next. Selected work will appear here as it is shared.</p>"}</section><nav class="ring" aria-label="Tribe web-ring">{rings}</nav><footer>Only work selected for your current access is shown. This page does not indicate current daimon activity.</footer></main></body></html>'''.encode()
 
 
 def preview(app, home, reference, version, subject, vpn, *, origin, parent_token, display_mode="details"):
@@ -530,7 +549,7 @@ def preview(app, home, reference, version, subject, vpn, *, origin, parent_token
             media_files = [name for name in selected["files"] if re.fullmatch(r"media/[a-f0-9]{64}\.[a-z0-9]{1,8}", name)]
             download_root = "/works/" + reference + "/" + selected["version_ref"] + "/"
             display = display.replace('<iframe ', '<iframe data-download-root="' + esc(download_root, quote=True) + '" data-download-files="' + esc(json.dumps(media_files), quote=True) + '" ', 1)
-        return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(selected["title"])} · {esc(app.homes[home]["name"])}</title><link rel="stylesheet" href="/home.css"><script src="/work-view.js" defer></script></head><body class="work-view">{display}</body></html>'''.encode()
+        return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(selected["title"])} · {esc(app.homes[home]["name"])}</title><link rel="stylesheet" href="/home.css"><script src="/home-style.js" defer></script><script src="/work-view.js" defer></script></head><body class="work-view">{display}</body></html>'''.encode()
     versions = ['<li><a href="/view/' + reference + '">Current version</a></li>']
     for previous in reversed(current.get("versions", [])):
         if app.policy.allows(previous, home=home, subject=subject, dedicated_vpn=vpn):
@@ -553,7 +572,7 @@ def preview(app, home, reference, version, subject, vpn, *, origin, parent_token
         for filename in selected["files"]
     )
     auth, script = auth_controls(subject, vpn, bool(app.passkeys), '/view/' + reference, bool(app.sso))
-    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(selected["title"])} · {esc(app.homes[home]["name"])}</title><link rel="stylesheet" href="/home.css">{script}</head><body><main><nav><a href="/">← Home</a>{auth}</nav><p id="passkey-status" role="status" aria-live="polite"></p><header><small>{esc(selected["visibility"])} · {"Current version" if version == "current" else "Earlier version"}</small><h1>{esc(selected["title"])}</h1><p>{esc(selected["summary"])}</p><a href="{esc(source, quote=True)}">Open selected work ↗</a></header>{display}<details><summary>Selected files</summary><ul>{files}</ul></details><details><summary>Versions available to you</summary><ul>{"".join(versions)}</ul></details></main></body></html>'''.encode()
+    return f'''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{esc(selected["title"])} · {esc(app.homes[home]["name"])}</title><link rel="stylesheet" href="/home.css"><script src="/home-style.js" defer></script>{script}</head><body><main><nav><a href="/">← Home</a>{auth}</nav><p id="passkey-status" role="status" aria-live="polite"></p><header><small>{esc(selected["visibility"])} · {"Current version" if version == "current" else "Earlier version"}</small><h1>{esc(selected["title"])}</h1><p>{esc(selected["summary"])}</p><a href="{esc(source, quote=True)}">Open selected work ↗</a></header>{display}<details><summary>Selected files</summary><ul>{files}</ul></details><details><summary>Versions available to you</summary><ul>{"".join(versions)}</ul></details></main></body></html>'''.encode()
 
 
 def key_page(app, subject=None, *, registered=False):
@@ -586,7 +605,7 @@ def handler(app, *, owner=False):
             self._headers_sent = True
             super().end_headers()
 
-        def respond(self, status, body, kind="application/json", cookies=(), headers=(), form_action="'self'"):
+        def respond(self, status, body, kind="application/json", cookies=(), headers=(), form_action="'self'", style_inline=False, telegram_sdk=False):
             if isinstance(body, dict):
                 body = json.dumps(body).encode()
             self.send_response(status)
@@ -605,12 +624,15 @@ def handler(app, *, owner=False):
             )
             self.send_header(
                 "Content-Security-Policy",
-                "default-src 'self'; script-src 'self'; frame-src "
+                "default-src 'self'; script-src 'self'"
+                + (" https://telegram.org/js/telegram-web-app.js" if telegram_sdk else "")
+                + "; frame-src "
                 + frames
                 + "; img-src 'self' "
                 + frames
                 + "; media-src "
                 + frames
+                + ("; style-src 'self' 'unsafe-inline'" if style_inline else "")
                 + "; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action " + form_action,
             )
             for cookie in cookies:
@@ -668,6 +690,9 @@ def handler(app, *, owner=False):
                 if app.sso:
                     from .login import routes
                     if routes(self, app, 'GET'): return
+                if app.designs:
+                    from .homemaker import routes
+                    if routes(self, app, 'GET'): return
                 content_origins = {
                     urlsplit(app.config[k]).netloc: app.config[k].rstrip("/")
                     for k in ("content_public_url", "content_vpn_url")
@@ -698,6 +723,23 @@ def handler(app, *, owner=False):
                         ),
                         "text/html; charset=utf-8",
                     )
+                elif path in ("/home-style.js", "/artifact-style.js"):
+                    self.respond(200, (Path(__file__).parent / "assets" / path[1:]).read_bytes(), "text/javascript; charset=utf-8")
+                elif path == "/style.json":
+                    if not app.styles:
+                        self.respond(200, {"contract":"homemaker.resolved/v1","mode":"default","style_ref":"default","style_revision":None,"appearance":None})
+                        return
+                    query = parse_qs(urlsplit(self.path).query, strict_parsing=True)
+                    surface = query.get("surface", ["home"])
+                    viewer = query.get('viewer', ['author'])
+                    if set(query) - {"surface", "viewer"} or len(surface) != 1 or len(viewer) != 1 or viewer[0] not in ('author', 'personal'):
+                        raise ValueError("invalid_style_surface")
+                    surface = surface[0]
+                    if viewer[0] == 'personal' and (not subject or subject.kind != 'human'):
+                        raise ValueError('style_viewer_denied')
+                    if surface != "home" and not (surface == 'homemaker' and app.designs) and not app.selected(home, surface, "current", subject, vpn):
+                        raise ValueError("style_surface_denied")
+                    self.respond(200, app.styles.resolved(home, surface, subject, personal=viewer[0] == 'personal'))
                 elif path == "/access/status":
                     self.respond(200, {
                         "contract": "dm.home-browser/v1",
@@ -1034,6 +1076,9 @@ def handler(app, *, owner=False):
                 if app.sso:
                     from .login import routes
                     if routes(self, app, 'POST', data): return
+                if app.designs:
+                    from .homemaker import routes
+                    if routes(self, app, 'POST', data): return
                 callback = urlsplit(self.path).path == '/access/sso/finish' and bool(app.sso)
                 home, origin, subject, vpn, cookies, token = self.context(login_callback=callback)
                 if callback:
@@ -1148,6 +1193,8 @@ def main():
     parser.add_argument("--client-example", action="store_true", help="Serve the optional independently authored library client")
     parser.add_argument('--auth-origin', help='Exact trusted shared login origin under the passkey RP')
     parser.add_argument('--google-client', help='Private optional Google OIDC client JSON file')
+    parser.add_argument('--homemaker-source', help='Qualified immutable Homemaker source and public build')
+    parser.add_argument('--homemaker-state', help='Private canonical Homemaker design state')
     args = parser.parse_args()
     from daimon_matrix.messaging_config import protected_read
 
@@ -1162,7 +1209,8 @@ def main():
         human_rosters=registry.rosters,
     )
     app = Application(config, authority, sessions, passkey_rp_id=args.passkey_rp_id, client_example=args.client_example,
-                      auth_origin=args.auth_origin, google_client=args.google_client)
+                      auth_origin=args.auth_origin, google_client=args.google_client,
+                      homemaker_source=args.homemaker_source, homemaker_state=args.homemaker_state)
     servers = [
         ThreadingHTTPServer(("127.0.0.1", config[key]), handler(app, owner=owner))
         for key, owner in (("viewer_port", False), ("owner_port", True))

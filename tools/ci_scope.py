@@ -16,7 +16,7 @@ from pathlib import Path
 CI_FILES = {'.github/workflows/tests.yml', 'README.md', 'tools/ci_scope.py',
             'tests/test_ci_scope.py', 'tests/test_ci_workflow.py'}
 # Closed documentation pages with no generated/runtime consumer. Unknown docs stay full.
-RUNBOOK_DOCS = {'docs/runbooks/tribu-sdk-successor.md'}
+RUNBOOK_DOCS = {'docs/runbooks/tribu-sdk-successor.md', 'docs/design/shared-home-styles.md'}
 CONTEXT_COPY_FILES = {'clusterctl/onboarding_guest.py', 'clusterctl/onboarding_host.py',
                       'tests/test_onboarding_guest.py', 'tests/test_onboarding_host.py'}
 CONTEXT_COPY_TESTS = ('tests/test_onboarding_guest.py', 'tests/test_onboarding_host.py',
@@ -232,6 +232,11 @@ HOME_FILES = {'clusterctl/homes/__init__.py', 'clusterctl/homes/policy.py',
     'clusterctl/homes/sessions.py', 'clusterctl/homes/authority.py',
     'clusterctl/homes/registry.py', 'clusterctl/homes/service.py',
     'clusterctl/homes/passkeys.py', 'clusterctl/homes/assets/passkeys.js',
+    'clusterctl/homes/styles.py', 'tests/test_home_styles.py',
+    'clusterctl/homes/homemaker.py', 'tests/test_home_homemaker.py',
+    'tools/qualify_homemaker_browser.py',
+    'clusterctl/homes/assets/home-style.js', 'clusterctl/homes/assets/artifact-style.js',
+    'docs/design/shared-home-styles.md', 'tests/js/home-style-client.cjs',
     'clusterctl/homes/login.py', 'clusterctl/homes/assets/login.js',
     'requirements-home-login.txt', 'tests/test_home_login.py', 'docs/design/home-shared-login.md',
     'tools/qualify_home_login_browser.py',
@@ -246,7 +251,7 @@ HOME_FILES = {'clusterctl/homes/__init__.py', 'clusterctl/homes/policy.py',
     'clusterd/assets/fonts/OFL.txt', 'clusterd/assets/fonts/PROVENANCE.json',
     'tests/test_home_access.py', 'tests/test_home_gateway.py', 'tests/test_home_host.py'}
 HOME_TESTS = ('tests/test_home_access.py', 'tests/test_home_gateway.py', 'tests/test_home_host.py',
-              'tests/test_home_passkeys.py', 'tests/test_home_client.py', 'tests/test_home_login.py',
+              'tests/test_home_passkeys.py', 'tests/test_home_client.py', 'tests/test_home_styles.py', 'tests/test_home_login.py', 'tests/test_home_homemaker.py',
               'tests/test_auth.py', 'tests/test_ci_scope.py', 'tests/test_ci_workflow.py')
 
 
@@ -271,6 +276,10 @@ HOME_WORKER_TESTS = ('tests/test_home_worker_successor.py', 'tests/test_onboardi
 def select(changed: list[str], root: Path) -> tuple[str, list[str]]:
     if not changed:
         return 'full', ['tests']
+    if set(changed) <= RUNBOOK_DOCS:
+        return 'docs', []
+    if set(changed) <= CI_FILES | RUNBOOK_DOCS:
+        return 'ci', ['tests/test_ci_scope.py', 'tests/test_ci_workflow.py']
     observation_tests = ('tests/test_onboarding_target.py', 'tests/test_onboarding_managed.py',
         'tests/test_onboarding_owner_client.py', 'tests/test_onboarding_code_successor.py',
         'tests/test_ci_scope.py', 'tests/test_ci_workflow.py')
@@ -293,10 +302,6 @@ def select(changed: list[str], root: Path) -> tuple[str, list[str]]:
         # Home-only read authority retains auth and workflow contracts. Native
         # custody, dependencies, admission and provisioning changes stay full.
         return 'homes', list(HOME_TESTS)
-    if set(changed) <= RUNBOOK_DOCS:
-        return 'docs', []
-    if set(changed) <= CI_FILES | RUNBOOK_DOCS:
-        return 'ci', ['tests/test_ci_scope.py', 'tests/test_ci_workflow.py']
     if ('tests/test_onboarding_group.py' in changed
             and set(changed) <= GROUP_FILES | CI_FILES
             and all((root / path.split('::', 1)[0]).is_file() for path in GROUP_TESTS)):
