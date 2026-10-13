@@ -6,6 +6,45 @@ from tools.ci_scope import ONBOARDING_CONTRACTS, select
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_scope_uses_only_the_verified_pr_merge_parent(monkeypatch):
+    import subprocess
+    from tools.ci_scope import scope_base
+    old_base, current_base, head, merge = (c * 40 for c in ('a', 'b', 'c', 'd'))
+    monkeypatch.setattr('tools.ci_scope.subprocess.run', lambda *a, **k:
+        subprocess.CompletedProcess(a, 0, f'{merge} {current_base} {head}\n'.encode()))
+    assert scope_base(ROOT, old_base, head) == current_base
+    assert scope_base(ROOT, old_base, 'e' * 40) == old_base
+    assert scope_base(ROOT, old_base, '') == old_base
+
+
+def test_pin_only_qualification_checks_code_content(monkeypatch, tmp_path):
+    import subprocess
+    from tools.ci_scope import sdk_pin_only, SDK_PIN_TESTS
+    originals = {
+        'requirements-weave.txt': 'daimon-matrix @ git+https://github.com/AlterMundi/daimon-matrix.git@' + 'a' * 40 + '\n',
+        'clusterctl/onboarding_sdk.py': 'MATRIX_COMMIT = "' + 'a' * 40 + '"\n\ndef validate():\n    return True\n',
+        'clusterctl/matrix_host.py': 'MATRIX_CONTRACT_COMMIT = "' + 'a' * 40 + '"\n',
+    }
+    for name, text in originals.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text.replace('a' * 40, 'b' * 40))
+    for name in SDK_PIN_TESTS:
+        path = tmp_path / name.split('::', 1)[0]
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.touch()
+    def show(argv, **kwargs):
+        name = argv[2].split(':', 1)[1]
+        return subprocess.CompletedProcess(argv, 0, originals[name].encode())
+    monkeypatch.setattr('tools.ci_scope.subprocess.run', show)
+    changed = list(originals)
+    assert sdk_pin_only(tmp_path, 'a' * 40, changed)
+    path = tmp_path / 'clusterctl/onboarding_sdk.py'
+    path.write_text(path.read_text().replace('return True', 'return False'))
+    assert not sdk_pin_only(tmp_path, 'a' * 40, changed)
+    assert not sdk_pin_only(tmp_path, 'a' * 40, changed + ['clusterctl/onboarding_custody.py'])
+
+
 def test_receiving_presentation_and_readiness_keep_native_admission_without_archive_jobs(tmp_path):
     from tools.ci_scope import RECEIVING_RUNTIME_FILES, SDK_TESTS
     changed = sorted(RECEIVING_RUNTIME_FILES | {'tools/ci_scope.py', 'tests/test_ci_scope.py',
