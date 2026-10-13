@@ -201,9 +201,10 @@ class Backend:
 
 
 class Application:
-    def __init__(self, config, authority, sessions, *, backends=None, passkey_rp_id=None, client_example=False, style_provider=None, auth_origin=None, google_client=None):
+    def __init__(self, config, authority, sessions, *, backends=None, passkey_rp_id=None, client_example=False, style_provider=None, auth_origin=None, google_client=None, homemaker_source=None, homemaker_state=None):
         self.styles = StyleConsumer(style_provider, authority, config["homes"]) if style_provider else None
         self.sso = None
+        self.designs = None
         self.client_example = client_example
         self.config, self.homes, self.authority, self.sessions = (
             config,
@@ -239,6 +240,12 @@ class Application:
             self.sso = Login(self, auth_origin, Google(google_client) if google_client else None)
         elif google_client:
             raise ValueError('google_requires_shared_login')
+        if homemaker_source or homemaker_state:
+            if not (homemaker_source and homemaker_state) or style_provider:
+                raise ValueError('one_canonical_homemaker_required')
+            from .homemaker import Homemaker
+            self.designs = Homemaker(self, homemaker_source, homemaker_state)
+            self.styles = StyleConsumer(self.designs, authority, self.homes)
 
     def identity(self, token, home, origin):
         row = self.sessions.resolve(token, home=home, origin=origin)
@@ -588,7 +595,7 @@ def handler(app, *, owner=False):
             self._headers_sent = True
             super().end_headers()
 
-        def respond(self, status, body, kind="application/json", cookies=(), headers=(), form_action="'self'"):
+        def respond(self, status, body, kind="application/json", cookies=(), headers=(), form_action="'self'", style_inline=False):
             if isinstance(body, dict):
                 body = json.dumps(body).encode()
             self.send_response(status)
@@ -613,6 +620,7 @@ def handler(app, *, owner=False):
                 + frames
                 + "; media-src "
                 + frames
+                + ("; style-src 'self' 'unsafe-inline'" if style_inline else "")
                 + "; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action " + form_action,
             )
             for cookie in cookies:
@@ -670,6 +678,9 @@ def handler(app, *, owner=False):
                 if app.sso:
                     from .login import routes
                     if routes(self, app, 'GET'): return
+                if app.designs:
+                    from .homemaker import routes
+                    if routes(self, app, 'GET'): return
                 content_origins = {
                     urlsplit(app.config[k]).netloc: app.config[k].rstrip("/")
                     for k in ("content_public_url", "content_vpn_url")
@@ -708,12 +719,15 @@ def handler(app, *, owner=False):
                         return
                     query = parse_qs(urlsplit(self.path).query, strict_parsing=True)
                     surface = query.get("surface", ["home"])
-                    if set(query) - {"surface"} or len(surface) != 1:
+                    viewer = query.get('viewer', ['author'])
+                    if set(query) - {"surface", "viewer"} or len(surface) != 1 or len(viewer) != 1 or viewer[0] not in ('author', 'personal'):
                         raise ValueError("invalid_style_surface")
                     surface = surface[0]
-                    if surface != "home" and not app.selected(home, surface, "current", subject, vpn):
+                    if viewer[0] == 'personal' and (not subject or subject.kind != 'human'):
+                        raise ValueError('style_viewer_denied')
+                    if surface != "home" and not (surface == 'homemaker' and app.designs) and not app.selected(home, surface, "current", subject, vpn):
                         raise ValueError("style_surface_denied")
-                    self.respond(200, app.styles.resolved(home, surface, subject))
+                    self.respond(200, app.styles.resolved(home, surface, subject, personal=viewer[0] == 'personal'))
                 elif path == "/access/status":
                     self.respond(200, {
                         "contract": "dm.home-browser/v1",
@@ -1050,6 +1064,9 @@ def handler(app, *, owner=False):
                 if app.sso:
                     from .login import routes
                     if routes(self, app, 'POST', data): return
+                if app.designs:
+                    from .homemaker import routes
+                    if routes(self, app, 'POST', data): return
                 callback = urlsplit(self.path).path == '/access/sso/finish' and bool(app.sso)
                 home, origin, subject, vpn, cookies, token = self.context(login_callback=callback)
                 if callback:
@@ -1164,6 +1181,8 @@ def main():
     parser.add_argument("--client-example", action="store_true", help="Serve the optional independently authored library client")
     parser.add_argument('--auth-origin', help='Exact trusted shared login origin under the passkey RP')
     parser.add_argument('--google-client', help='Private optional Google OIDC client JSON file')
+    parser.add_argument('--homemaker-source', help='Qualified immutable Homemaker source and public build')
+    parser.add_argument('--homemaker-state', help='Private canonical Homemaker design state')
     args = parser.parse_args()
     from daimon_matrix.messaging_config import protected_read
 
@@ -1178,7 +1197,8 @@ def main():
         human_rosters=registry.rosters,
     )
     app = Application(config, authority, sessions, passkey_rp_id=args.passkey_rp_id, client_example=args.client_example,
-                      auth_origin=args.auth_origin, google_client=args.google_client)
+                      auth_origin=args.auth_origin, google_client=args.google_client,
+                      homemaker_source=args.homemaker_source, homemaker_state=args.homemaker_state)
     servers = [
         ThreadingHTTPServer(("127.0.0.1", config[key]), handler(app, owner=owner))
         for key, owner in (("viewer_port", False), ("owner_port", True))

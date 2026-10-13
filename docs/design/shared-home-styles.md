@@ -78,6 +78,31 @@ and demonstrate one home and an existing Telecodex Mini App sharing a default,
 explicit exceptions, followed edits and unavailable/revoked-source fallbacks.
 Physical Telegram acceptance remains separate from browser qualification.
 
+The receiving adapter now exists as an opt-in candidate: `--homemaker-source`
+selects qualified immutable creator code/public build, and `--homemaker-state`
+selects its one canonical private store. Both are required together. The source
+is never selected by an HTTP request. The existing workshop is served at
+`/homemaker/`, with the existing compact application at `/homemaker/miniapp.html`.
+Their trusted bootstrap injects the current server transport into the existing
+builder. The public source stays usable in its original protected publication;
+that opaque view does not receive a credential or design-write capability.
+
+Pair writes use the existing verified human session and current Matrix pairing;
+personal writes use that human's own scope. A cookie does not by itself grant
+another pair's editor rights. Audience is server-bound (public pair recipe or
+private personal recipe); requests cannot name an actor or override it. Preference
+edits do not require a redundant fresh fingerprint. Credential operations keep
+their stronger existing freshness and ancestor-revocation checks.
+
+The read-only appearance consumer can explicitly opt into its verified visitor's
+personal preference; it never accepts an arbitrary human reference from the
+browser. The creator's application uses the stable `homemaker` surface name.
+Fixed `/design-assets/` routes expose only the original built font CSS/fonts and
+license files. Native fonts were exercised with the actual creator and canonical
+authority in HTTPS browser qualification. A configured writer/default switch and
+an explicit MiniApp choice were qualified locally, with synthetic humans; no
+live configuration or physical Telegram acceptance is implied.
+
 Preserve current artifacts/grants/recipe exports, body/native sessions, passkeys,
 source history and compatible rollback. Automatic package updates and autonomous
 attention stay outside this increment.

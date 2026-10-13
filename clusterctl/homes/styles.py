@@ -9,7 +9,7 @@ class StyleConsumer:
     def __init__(self, provider, authority, homes):
         self.provider, self.authority, self.homes = provider, authority, homes
 
-    def resolved(self, home, surface, subject=None):
+    def resolved(self, home, surface, subject=None, *, personal=False):
         owner = self.homes[home]['owner_being_ref']
         current = self.authority.actor(subject.ref) if subject else None
         if subject and (not current or not current.enabled or current.revision != subject.revision):
@@ -17,6 +17,6 @@ class StyleConsumer:
         author = {'kind':'being','ref':owner}
         # This receiving home follows its own pair's choices. A visitor from
         # another pair does not automatically repaint an authored public home.
-        viewer = {'kind':'human','ref':subject.ref} if subject and subject.kind=='human' and self.authority.paired_human(home)==subject.ref else None
+        viewer = {'kind':'human','ref':subject.ref} if subject and subject.kind=='human' and (personal or self.authority.paired_human(home)==subject.ref) else None
         return self.provider.resolve(subject.ref if subject else None, author=author,
                                      surface=surface, viewer_scope=viewer)
