@@ -12,7 +12,8 @@
       authenticatorAttachment: credential.authenticatorAttachment};
   }
   function codeURL(path = location.pathname + location.search + location.hash) {
-    const decoded = decodeURIComponent(path);
+    // Tolerate literal/malformed percent escapes as the server return validator does.
+    const decoded = path.replace(/%([0-9a-f]{2})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
     if (path.length > 2048 || !path.startsWith("/") || decoded.startsWith("//") ||
         /[\\\x00-\x1f]/.test(decoded) || new URL(path, location.origin).origin !== location.origin)
       throw new TypeError("A home return must be a local path.");

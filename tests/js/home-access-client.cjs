@@ -54,10 +54,11 @@ test('catalog, visitor status and JSON logout reuse only reader endpoints',async
 });
 test('approved-code recovery retains path/query/fragment and refuses foreign redirects',()=>{
   const f=fixture();assert.equal(f.client.codeURL(),'/access?return=%2Fdifferent%3Fq%3D1%23part');
+  assert.equal(f.client.codeURL('/?q=100%#100%'),'/access?return=%2F%3Fq%3D100%25%23100%25');
   for(const p of ['https://elsewhere.test','//elsewhere.test','/%2felsewhere.test','/%5celsewhere.test','/x%0a'])assert.throws(()=>f.client.codeURL(p));
 });
 test('default-page adapter only disables its own controls and preserves cancellation recovery',async()=>{
-  const f=fixture();const handlers={};const action={dataset:{mode:'login',reload:'true'},disabled:false,addEventListener:(name,fn)=>{handlers[name]=fn;}};
+  const f=fixture();f.ctx.location.search='?q=100%';f.ctx.location.hash='#100%';const handlers={};const action={dataset:{mode:'login',reload:'true'},disabled:false,addEventListener:(name,fn)=>{handlers[name]=fn;}};
   const status={textContent:''}, unrelated={disabled:false};
   f.ctx.document={getElementById:id=>id==='passkey-action'?action:status,
     querySelectorAll:selector=>selector==='button'?[action,unrelated]:[]};
