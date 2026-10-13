@@ -62,14 +62,18 @@ def test_canonical_source_asset_route_cannot_reach_backend_state_or_symlinks(tmp
         with pytest.raises(ValueError):provider.asset(name)
 
 
-def test_anonymous_editor_offers_shared_login_without_loading_identity_or_design(system):
+@pytest.mark.parametrize('entry', ['/homemaker/', '/homemaker/miniapp.html'])
+def test_anonymous_editor_offers_shared_login_without_loading_identity_or_design(system, entry):
     app,_=system;app.designs=receiving(app)
     with serving(handler(app)) as base:
         conn=HTTPConnection(urlsplit(base).netloc)
-        conn.request('GET','/homemaker/',headers={'Host':'one.example.test'})
+        conn.request('GET',entry,headers={'Host':'one.example.test'})
         response=conn.getresponse();body=response.read()
         assert response.status==200 and b'Sign in' in body and b'Tu taller' in body
         assert b'bootstrap.js' not in body and b'owner' not in body
+        miniapp=entry.endswith('miniapp.html')
+        assert (b'home-miniapp-login.js' in body)==miniapp
+        assert ('https://telegram.org/js/telegram-web-app.js' in response.getheader('Content-Security-Policy'))==miniapp
         conn.request('GET','/homemaker/api/context',headers={'Host':'one.example.test'})
         response=conn.getresponse();response.read();assert response.status==404
         conn.close()
