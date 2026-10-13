@@ -81,6 +81,33 @@ class Homemaker:
         return self._save(subject, {'kind':'being','ref':subject.ref}, payload['audience'],
                           {key:value for key,value in payload.items() if key != 'audience'})
 
+    def surface(self, home, value):
+        if value in ('default', 'home', 'homemaker'):
+            return value
+        if not isinstance(value, str) or not any(
+                entry['artifact_ref'] == value for entry in self.app.publication(home)['entries']):
+            raise ValueError('unregistered_design_surface')
+        return value
+
+    def selection_native(self, home, subject, payload, *, write=False):
+        keys={'surface','selection','expected_revision','operation_id'} if write else {'surface'}
+        if not isinstance(payload,dict) or set(payload)!=keys:
+            raise ValueError('invalid_design_selection')
+        scope={'kind':'being','ref':subject.ref}
+        surface=self.surface(home,payload['surface'])
+        if not write:
+            return self.authority.read_selection(subject.ref,scope=scope,surface=surface)
+        return self.authority.select(subject.ref,scope=scope,surface=surface,
+            selection=payload['selection'],expected_revision=payload['expected_revision'],operation_id=payload['operation_id'])
+
+    def recipe_native(self, subject, payload):
+        if not isinstance(payload,dict) or not {'design_ref'}<=set(payload)<={'design_ref','design_revision'}:
+            raise ValueError('invalid_design_recipe_request')
+        recipe=self.authority.read_recipe(subject.ref,payload['design_ref'],payload.get('design_revision'))
+        if recipe is None:
+            raise ValueError('design_recipe_unavailable')
+        return recipe
+
     def _save(self, subject, owner, audience, payload):
         if (not isinstance(payload, dict) or set(payload) != {
                 'variant', 'recipe', 'expected_design_revision', 'expected_selection_revision', 'operation_id'}):

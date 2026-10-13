@@ -102,6 +102,19 @@ human or another being as an author. A reader cookie is not a publishing
 credential and cannot call these operations. Both routes use the same canonical
 source component as the paired human's editor, with no second design store.
 
+The same owner adapter exposes `style-selection` and `style-select` for the
+current selection or an explicit follow/pin/default choice. Its surface must be
+`default`, `home`, `homemaker` or a resource currently registered to that home.
+The verified owner fixes the scope; a request cannot name an actor or another
+scope. `style-recipe` uses the canonical recipe privacy check and returns its
+bounded projection without actor/history data. Reader credentials cannot call
+these operations. Selection and save conflicts return stable409 codes; retain
+the exact intent on uncertain I/O instead of manufacturing another revision.
+The optional daimon-home2.1 commands consume these same operations; previous
+publication helpers remain compatible. Actual owner HTTP/maintained-helper/
+canonical-source qualification covers follow, pin, default restoration, exact
+retry and privacy. It does not imply a live operator adoption or phone trial.
+
 The read-only appearance consumer can explicitly opt into its verified visitor's
 personal preference; it never accepts an arbitrary human reference from the
 browser. The creator's application uses the stable `homemaker` surface name.
