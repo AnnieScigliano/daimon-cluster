@@ -77,3 +77,32 @@ def test_retry_cannot_rearm_degraded_or_compensated_update(tmp_path, state):
     with pytest.raises(JournalConflict, match='explicit repair'):
         plan_update(journal, **arguments)
     assert journal.get(first['operation_id']) == before
+
+
+@pytest.mark.parametrize('changed', [False, True])
+def test_completion_between_lookup_and_plan_reuses_only_the_exact_operation(tmp_path, monkeypatch, changed):
+    journal, arguments = fixture(tmp_path)
+    real_lookup = journal.latest_for_idempotency_key
+    stale_read = True
+    completed = None
+
+    def lookup(key):
+        nonlocal stale_read, completed
+        if stale_read:
+            stale_read = False
+            concurrent = copy.deepcopy(arguments)
+            if changed:
+                concurrent['intended_transition']['receivers']['one'] = 'e' * 64
+            planned = plan_update(journal, **concurrent)
+            journal.advance(planned['operation_id'], 'completed')
+            completed = journal.get(planned['operation_id'])
+            return None
+        return real_lookup(key)
+
+    monkeypatch.setattr(journal, 'latest_for_idempotency_key', lookup)
+    if changed:
+        with pytest.raises(JournalConflict, match='different exact selection vectors'):
+            plan_update(journal, **arguments)
+    else:
+        assert plan_update(journal, **arguments) == completed
+    assert journal.list_all() == [completed]

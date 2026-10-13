@@ -46,9 +46,17 @@ def plan_update(journal, *, manifest_digest: str, target: str,
     key = operation + ':' + target + ':' + manifest_digest
     retained = journal.latest_for_idempotency_key(key)
     if retained is None:
-        retained = journal.plan(operation=operation, target=target, idempotency_key=key,
-            intent=intent, expected_precondition=expected_precondition,
-            intended_transition=intended_transition, audit_identity=audit_identity)
+        try:
+            retained = journal.plan(operation=operation, target=target, idempotency_key=key,
+                intent=intent, expected_precondition=expected_precondition,
+                intended_transition=intended_transition, audit_identity=audit_identity)
+        except JournalConflict:
+            # Another caller can complete this exact operation after our lookup.
+            # Inspect its retained row once; the full validation below still
+            # rejects different vectors and operations needing explicit repair.
+            retained = journal.latest_for_idempotency_key(key)
+            if retained is None:
+                raise
     if (retained['operation'] != operation or retained['target'] != target
             or retained['intent'] != {'schema': INTENT_SCHEMA, **intent}
             or retained['expected_precondition'] != expected_precondition
