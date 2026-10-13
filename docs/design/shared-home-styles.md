@@ -56,7 +56,7 @@ Explicitly authored work may opt out through its own style declaration.
 
 The current consumer candidate refreshes on opening/resuming and at most once
 per15seconds while visible; same-origin invalidation can refresh immediately.
-Hidden/closed pages cancel their timer. This is browser presentation traffic,
+Requests have a10second fetch/body deadline. Hidden/closed pages cancel their timer, abort in-flight requests and discard late responses. This is browser presentation traffic,
 not Matrix inbox polling or a model wakeup. Retain the last valid presentation
 on unavailable/malformed responses and the local accessible fallback when no
 shared selection applies. No offline style cache adds artifact access rights.
