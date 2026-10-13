@@ -20,6 +20,17 @@ non-runtime context remains byte-identical. `onboarding_sdk.install` installs a
 new content-addressed environment and validates every installed wheel byte;
 never repair or overwrite a completed generation in place.
 
+SDK installation/preflight must not run startup hooks or an unverified installed
+`pip`. Use the qualified interpreter's ensurepip wheel in a hook-free `-I -S`
+process, with an explicit private prefix. The SDK dependency check reads installed
+metadata from an explicit directory and uses the bootstrap reader; it does not
+add that directory to executable import paths. Missing or conflicting dependencies
+still fail. A completed generation remains read-only; after an interrupted install,
+only that incomplete dependency generation may be prepared again.
+These checks prove installed artifact/dependency integrity, not an observed loaded
+receiver. The compatible-reader probe, selected authority/application and actual
+receiving readiness remain distinct stages under Matrix #337 / Cluster #232.
+
 Retain the actual currently selected Telegram artifact. Where Telegram already
 has its own qualified successor, keep that independent selection. If building a
 combined V3 successor, pass its current qualified artifact explicitly: building
@@ -149,8 +160,8 @@ diagnostic sidecars carry observations without granting transmission authority.
 
 ## Membership group default — 2026-10-13
 
-Matrix #151/#198 and merged #330 own the conversation contract. Current qualified
-SDK source: `cdafbc0513d43c39f03be6e8b1b0636b9e4e9422`. CompAII, Eko and Oliva
+Matrix #151/#198 and merged #330/#332 own the conversation contract. Current
+deployed SDK source: `a1a70b6420692d19f85ad0edb945cba00c3f5459`. CompAII, Eko and Oliva
 share one signed group, with authenticated receipts for the three VPS bodies.
 One message freezes all active Root bodies, including unavailable siblings; one
 Tribu publication represents that message. A transport ACK is not delivery.

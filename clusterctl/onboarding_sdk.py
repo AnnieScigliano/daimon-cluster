@@ -81,6 +81,42 @@ def _run(argv: list[str]) -> str:
         raise OnboardingError("native_onboarding_sdk_refused") from None
 
 
+def _pip(venv: Path, mode: str, *arguments: str) -> None:
+    """Use the trusted interpreter's ensurepip wheel, never installed site code.
+
+    -I alone executes site hooks. -S also skips venv prefix adjustment on
+    Python 3.13, so restore that prefix explicitly while leaving import paths
+    limited to stdlib and the interpreter's bootstrap wheel. Dependency checking
+    reads installed metadata through an explicit path; it never imports it.
+    """
+    launcher = '''import ensurepip, runpy, sys
+sys.prefix = sys.exec_prefix = sys.argv.pop(1)
+mode = sys.argv.pop(1)
+with ensurepip._get_pip_whl_path_ctx() as wheel:
+    sys.path.append(str(wheel))
+    if mode == 'check':
+        from pip._internal.metadata import get_environment
+        from pip._internal.operations.check import PackageDetails, check_package_set
+        packages = {}
+        for dist in get_environment([sys.argv[1]]).iter_installed_distributions(
+                local_only=False, skip=()):
+            name = dist.canonical_name
+            if name in packages:
+                raise SystemExit(1)
+            packages[name] = PackageDetails(dist.version, list(dist.iter_dependencies()))
+        missing, conflicting = check_package_set(packages)
+        raise SystemExit(bool(missing or conflicting))
+    if mode == 'bootstrap':
+        sys.argv[1:] = ['install', '--prefix', sys.prefix, '--no-index',
+                        '--no-deps', '--upgrade', str(wheel)]
+    elif mode != 'install':
+        raise SystemExit(1)
+    runpy.run_module('pip', run_name='__main__', alter_sys=True)
+'''
+    _run([str(venv / "bin/python"), "-I", "-S", "-c", launcher,
+          str(venv), mode, *arguments])
+
+
 def installed(venv: Path, code: Path, value: dict, *, code_uid: int) -> None:
     # Query only stdlib metadata in the isolated interpreter. Do not import an
     # unverified installed SDK, dependency, .pth hook or sitecustomize.
@@ -101,7 +137,7 @@ def installed(venv: Path, code: Path, value: dict, *, code_uid: int) -> None:
                 actual = onboarding_release.regular(site / member.filename, uid=os.geteuid())
                 if hashlib.sha256(actual).digest() != hashlib.sha256(archive.read(member)).digest():
                     raise OnboardingError("installed_onboarding_sdk_changed")
-    _run([str(venv / "bin/python"), "-I", "-m", "pip", "check"])
+    _pip(venv, 'check', str(site))
 
 
 def observe(home: Path, code: Path, *, code_uid: int = 0,
@@ -144,12 +180,13 @@ def install(home: Path, code: Path, release_digest: str, *, code_uid: int = 0,
         # Before completion only dependency installation may be replayed. No
         # runtime/custody is created in this directory and completed SDK bytes
         # are never repaired by overwriting them.
-        _run([sys.executable, "-I", "-m", "venv", str(venv)])
+        _run([sys.executable, "-I", "-S", "-m", "venv", "--without-pip", str(venv)])
         venv.chmod(0o700)
-        _run([str(venv / "bin/python"), "-I", "-m", "pip", "install", "--no-index",
+        _pip(venv, 'bootstrap')
+        _pip(venv, 'install', "install", "--prefix", str(venv), "--no-index",
               "--no-deps", "--require-hashes", "--only-binary=:all:", "--no-cache-dir",
               "--force-reinstall", "--find-links", str(code / "sdk/wheels"),
-              "--requirement", str(code / "sdk/requirements.txt")])
+              "--requirement", str(code / "sdk/requirements.txt"))
         installed(venv, code, value, code_uid=code_uid)
         being_seed._write(receipt, expected)
         return venv

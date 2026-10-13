@@ -12,7 +12,7 @@ from tests.test_onboarding_guest import artifact
 from tools.build_onboarding_sdk import seal
 
 
-def fixture(tmp_path):
+def fixture(tmp_path, *, requirements=()):
     code = tmp_path / "code"
     artifact(code)
     (code / "release.json").unlink()
@@ -22,7 +22,8 @@ def fixture(tmp_path):
     package = "daimon_matrix-0.1.0rc1.dist-info"
     with zipfile.ZipFile(wheels / "daimon_matrix-0.1.0rc1-py3-none-any.whl", "w") as archive:
         archive.writestr("daimon_matrix/__init__.py", "# Synthetic dependency-installation fixture only.\n")
-        archive.writestr(package + "/METADATA", "Metadata-Version: 2.1\nName: daimon-matrix\nVersion: 0.1.0rc1\n")
+        archive.writestr(package + "/METADATA", "Metadata-Version: 2.1\nName: daimon-matrix\nVersion: 0.1.0rc1\n"
+                         + ''.join('Requires-Dist: ' + row + '\n' for row in requirements))
         archive.writestr(package + "/WHEEL", "Wheel-Version: 1.0\nGenerator: test\nRoot-Is-Purelib: true\nTag: py3-none-any\n")
         archive.writestr(package + "/RECORD", "")
     seal(root)
@@ -65,9 +66,46 @@ def test_missing_install_acknowledgement_replays_only_offline_dependencies(tmp_p
     assert not list(home.rglob("installation.json"))
     before = next(home.glob(".local/share/daimon-matrix/sdk/*/venv/lib/python*/site-packages/daimon_matrix/__init__.py"))
     checksum = hashlib.sha256(before.read_bytes()).hexdigest()
+    marker = tmp_path / 'unexpected-startup'
+    hook = 'import pathlib; pathlib.Path(' + repr(str(marker)) + ').write_text("executed")\n'
+    (before.parent.parent / 'unexpected.pth').write_text(hook)
+    (before.parent.parent / 'sitecustomize.py').write_text(hook)
     venv = onboarding_sdk.install(home, code, fingerprint, code_uid=os.geteuid())
     assert hashlib.sha256(before.read_bytes()).hexdigest() == checksum
     assert (venv.parent / "installation.json").exists()
+    assert not marker.exists()
+
+
+def test_completed_sdk_probe_never_executes_site_hooks_or_installed_pip(tmp_path):
+    code, fingerprint, home = fixture(tmp_path)
+    venv = onboarding_sdk.install(home, code, fingerprint, code_uid=os.geteuid())
+    site = next(venv.glob('lib/python*/site-packages'))
+    marker = tmp_path / 'unexpected-startup'
+    hook = 'import pathlib; pathlib.Path(' + repr(str(marker)) + ').write_text("executed")\n'
+    files = [site / 'unexpected.pth', site / 'sitecustomize.py', site / 'pip/__init__.py']
+    for path in files:
+        path.write_text(hook + 'raise RuntimeError("unverified installed code executed")\n')
+    before = {path: path.read_bytes() for path in files}
+    receipt = (venv.parent / 'installation.json').read_bytes()
+    assert onboarding_sdk.observe(home, code, code_uid=os.geteuid()) == venv
+    assert onboarding_sdk.install(home, code, fingerprint, code_uid=os.geteuid()) == venv
+    assert not marker.exists()
+    assert all(path.read_bytes() == raw for path, raw in before.items())
+    assert (venv.parent / 'installation.json').read_bytes() == receipt
+
+
+def test_hook_free_dependency_check_still_rejects_missing_dependencies(tmp_path):
+    code, fingerprint, home = fixture(tmp_path, requirements=('missing-synthetic-package>=1',))
+    with pytest.raises(OnboardingError, match='native_onboarding_sdk_refused'):
+        onboarding_sdk.install(home, code, fingerprint, code_uid=os.geteuid())
+    assert not list(home.rglob('installation.json'))
+
+
+def test_hook_free_dependency_check_honors_environment_markers(tmp_path):
+    code, fingerprint, home = fixture(tmp_path,
+        requirements=('missing-synthetic-package>=1; python_version < "0"',))
+    venv = onboarding_sdk.install(home, code, fingerprint, code_uid=os.geteuid())
+    assert onboarding_sdk.observe(home, code, code_uid=os.geteuid()) == venv
 
 
 def test_changed_wheel_or_requirement_refused_before_home_creation(tmp_path):
