@@ -66,7 +66,13 @@ external-link click requirements. No production host is used.
 <scratch-output>` qualifies two fictional worlds through an actual loopback HTTPS
 gateway with synthetic authenticated cookies. It checks desktop/narrow widths,
 outer journal URLs, return fragments, legacy aliases, images/fonts and audio/video
-playback, and writes screenshots/receipt. Completed browser evidence is pending;
-the script's presence is not acceptance. The owning SDK/CLI, real publication and
+playback, and writes screenshots/receipt. Homemaker CI
+[38526557653](https://github.com/AnnieScigliano/homemaker/actions/runs/38526557653)
+passed all six cases against root source61745c7 and Homemaker998d28d. Receipts and
+two narrow screenshots were inspected; full source/scope evidence lives in
+Homemaker docs/ROOT-NAVIGATION-VALIDATION.json. Broad local home/CI tests also
+pass130 cases with one optional case skipped; two PATH-only Node failures passed
+after correcting the selected executable environment. The upstream fork workflow
+still requires maintainer approval. The owning SDK/CLI, real publication and
 root selection, physical devices and existing-site migration remain separate
 integration work.
