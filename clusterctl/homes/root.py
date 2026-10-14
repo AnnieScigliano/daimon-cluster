@@ -12,7 +12,7 @@ import re
 def valid_path(path):
     return isinstance(path, str) and bool(
         re.fullmatch(
-            r"/(?:index\.html|(?:journal|blog)/[a-z0-9][a-z0-9_-]{0,79}(?:/index\.html|\.html))?",
+            r"/(?:index\.html|blog/?|(?:journal|blog)/[a-z0-9][a-z0-9_-]{0,79}(?:/index\.html|\.html))?",
             path,
         )
     )

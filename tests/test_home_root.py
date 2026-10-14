@@ -129,7 +129,14 @@ def test_aliases_are_bounded_to_published_home_pages_and_cannot_override_authori
         "one",
         "fixture-owner",
         "home-root-select",
-        {**payload, "routes": {"/blog/old-day.html": "journal/day/index.html"}},
+        {
+            **payload,
+            "routes": {
+                "/blog/old-day.html": "journal/day/index.html",
+                "/blog/": "index.html",
+                "/blog/index.html": "index.html",
+            },
+        },
     )
     assert (
         result["selection"]["routes"]["/blog/old-day.html"] == "journal/day/index.html"

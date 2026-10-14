@@ -26,7 +26,9 @@
     if (event.data?.type === "home-root:route") {
       const path = event.data.path;
       if (typeof path !== "string" || !Object.hasOwn(routes, path)) return;
-      location.assign(path);
+      const fragment = event.data.fragment ?? "";
+      if (typeof fragment !== "string" || fragment.length >= 2048 || !/^(?:#[A-Za-z0-9/_-]*)?$/.test(fragment)) return;
+      location.assign(path + fragment);
       return;
     }
     if (event.data?.type === "home-root:external" && panel) {

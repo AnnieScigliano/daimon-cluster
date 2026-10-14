@@ -119,7 +119,9 @@ def main():
                         "resource": entry["artifact_ref"],
                         "version": entry["version_ref"],
                         "routes": {
-                            "/blog/old-day.html": "journal/primer-horizonte/index.html"
+                            "/blog/old-day.html": "journal/primer-horizonte/index.html",
+                            "/blog/": "index.html",
+                            "/blog/index.html": "index.html",
                         },
                     },
                 )
@@ -185,7 +187,7 @@ def main():
                     page.frame_locator("iframe").locator(
                         'a[href="../../index.html#journal"]'
                     ).last.click()
-                    page.wait_for_url(origin + "/")
+                    page.wait_for_url(origin + "/#journal")
                     assert (
                         page.frame_locator("iframe").locator(".journal-index a").count()
                         == 2

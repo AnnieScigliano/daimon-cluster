@@ -22,7 +22,9 @@ def test_root_parent_messages_cannot_call_owner_routes_or_open_external_pages():
     listener({source:child,origin:'https://untrusted.example',data:{type:'home-root:route',path:'/'}});
     listener({source:child,origin:'null',data:{type:'home-root:route',path:'/owner/one/home-root-select'}});
     if(navigations.length)throw Error('Unqualified navigation');
-    listener({source:child,origin:'null',data:{type:'home-root:route',path:'/journal/day/index.html'}});
+    listener({source:child,origin:'null',data:{type:'home-root:route',path:'/journal/day/index.html',fragment:'javascript:bad'}});
+    if(navigations.length)throw Error('Invalid route fragment');
+    listener({source:child,origin:'null',data:{type:'home-root:route',path:'/journal/day/index.html',fragment:'#media'}});
     listener({source:child,origin:'null',data:{type:'home-root:external',url:'javascript:alert(1)'}});
     if(!panel.hidden)throw Error('Unsafe external link');
     listener({source:child,origin:'null',data:{type:'home-root:external',url:'https://selected.example/page'}});
@@ -36,5 +38,6 @@ def test_root_parent_messages_cannot_call_owner_routes_or_open_external_pages():
             "const SOURCE=" + json.dumps(source) + ";" + script,
         ],
         text=True,
+        timeout=30,
     )
-    assert json.loads(result)["route"] == "/journal/day/index.html"
+    assert json.loads(result)["route"] == "/journal/day/index.html#media"
